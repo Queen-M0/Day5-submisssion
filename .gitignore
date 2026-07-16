@@ -1,0 +1,6 @@
+.DS_Store
+.idea/
+*.swp
+*.swo
+__pycache__/
+.env
