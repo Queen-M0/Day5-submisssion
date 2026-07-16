@@ -1,4 +1,4 @@
-from app.models.entities import Appeal, AuditLog, Content, ManualReview, ModerationRecord, Scene, User
+from app.models.entities import Appeal, AuditLog, Content, ManualReview, ModerationRecord, Scene, Topic, User
 
 __all__ = [
     "Appeal",
@@ -7,6 +7,6 @@ __all__ = [
     "ManualReview",
     "ModerationRecord",
     "Scene",
+    "Topic",
     "User",
 ]
-

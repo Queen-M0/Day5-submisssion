@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import appeals, auth, contents, reviewer, scenes
+from app.api import appeals, auth, community, contents, me, reviewer, scenes, topics
 from app.core.config import get_settings
 
 
@@ -32,7 +32,10 @@ app.add_middleware(
 
 app.include_router(auth.router, prefix="/api")
 app.include_router(scenes.router, prefix="/api")
+app.include_router(community.router, prefix="/api")
+app.include_router(topics.router, prefix="/api")
 app.include_router(contents.router, prefix="/api")
+app.include_router(me.router, prefix="/api")
 app.include_router(appeals.router, prefix="/api")
 app.include_router(reviewer.router, prefix="/api")
 

@@ -8,6 +8,7 @@ import { StatusTag } from "../components/StatusTag";
 import { useAuth } from "../context/AuthContext";
 import { useDemo } from "../context/DemoContext";
 import type { DemoFloor, DemoTopic } from "../types";
+import { apiErrorMessage } from "../api/client";
 
 type OwnedItem = { topic: DemoTopic; floor: DemoFloor };
 
@@ -15,10 +16,12 @@ export function MyPostsPage() {
   const { message } = App.useApp();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { topics, submitAppeal, findAppeal } = useDemo();
+  const { topics, submitAppeal, findAppeal, loadTimeline } = useDemo();
   const [filter, setFilter] = useState("all");
   const [selected, setSelected] = useState<OwnedItem | null>(null);
   const [appealTarget, setAppealTarget] = useState<OwnedItem | null>(null);
+  const [submittingAppeal, setSubmittingAppeal] = useState(false);
+  const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
   const [form] = Form.useForm();
 
   const owned = useMemo(() => topics.flatMap((topic) => topic.floors.filter((floor) => floor.authorId === user.id).map((floor) => ({ topic, floor }))).sort((a, b) => b.floor.createdAt.localeCompare(a.floor.createdAt)), [topics, user.id]);
@@ -29,10 +32,29 @@ export function MyPostsPage() {
   };
   const visible = filter === "all" ? owned : owned.filter((item) => categories[filter]?.includes(item.floor.status));
 
-  const appeal = (values: { appealType: string; reason: string; extraContext: string }) => {
+  const openDetails = async (item: OwnedItem) => {
+    setDetailLoadingId(item.floor.id);
+    try {
+      const auditTrail = await loadTimeline(item.floor.id);
+      setSelected({ topic: item.topic, floor: { ...item.floor, auditTrail } });
+    } catch (error) {
+      message.error(apiErrorMessage(error));
+    } finally {
+      setDetailLoadingId(null);
+    }
+  };
+
+  const appeal = async (values: { appealType: string; reason: string; extraContext: string }) => {
     if (!appealTarget) return;
-    submitAppeal({ contentId: appealTarget.floor.id, authorId: user.id, ...values });
-    form.resetFields(); setAppealTarget(null); message.success("申诉已提交：AI 将提供反证，最终由审核员裁决");
+    setSubmittingAppeal(true);
+    try {
+      await submitAppeal({ contentId: appealTarget.floor.id, authorId: user.id, ...values });
+      form.resetFields(); setAppealTarget(null); message.success("申诉已写入后端，等待审核员裁决");
+    } catch (error) {
+      message.error(apiErrorMessage(error));
+    } finally {
+      setSubmittingAppeal(false);
+    }
   };
 
   return (
@@ -53,7 +75,7 @@ export function MyPostsPage() {
             <Typography.Text className="owned-topic" onClick={() => navigate(`/topics/${item.topic.id}`)}>{item.topic.title}</Typography.Text>
             <Typography.Paragraph className="owned-text" ellipsis={{ rows: 2 }}>{item.floor.text}</Typography.Paragraph>
             <div className="reason-strip"><span>系统说明</span><p>{item.floor.moderation.userVisibleReason}</p></div>
-            <div className="owned-card-actions"><Space wrap>{item.floor.moderation.riskTypes.map((type) => <RiskTag key={type} type={type} />)}</Space><Space><Button icon={<EyeOutlined />} onClick={() => setSelected(item)}>审核详情</Button>{appealable && <Button type="primary" icon={<MessageOutlined />} onClick={() => setAppealTarget(item)}>发起申诉</Button>}</Space></div>
+            <div className="owned-card-actions"><Space wrap>{item.floor.moderation.riskTypes.map((type) => <RiskTag key={type} type={type} />)}</Space><Space><Button icon={<EyeOutlined />} loading={detailLoadingId === item.floor.id} onClick={() => { void openDetails(item); }}>审核详情</Button>{appealable && <Button type="primary" icon={<MessageOutlined />} onClick={() => setAppealTarget(item)}>发起申诉</Button>}</Space></div>
           </Card>;
         })}
       </div>}
@@ -76,12 +98,12 @@ export function MyPostsPage() {
       </Drawer>
 
       <Modal title="提交内容申诉" open={Boolean(appealTarget)} onCancel={() => setAppealTarget(null)} footer={null} width={600} destroyOnClose>
-        {appealTarget && <><div className="appeal-target-copy"><span>原内容</span><p>{appealTarget.floor.text}</p></div><Typography.Paragraph type="secondary">申诉不会把相同输入交给 AI 自动终审。系统会读取补充上下文，生成支持维持与支持改判的两组依据，再由审核员决定。</Typography.Paragraph></>}
+        {appealTarget && <><div className="appeal-target-copy"><span>原内容</span><p>{appealTarget.floor.text}</p></div><Typography.Paragraph type="secondary">申诉理由和补充上下文会写入后端，由审核员结合原始记录作出最终决定。</Typography.Paragraph></>}
         <Form form={form} layout="vertical" onFinish={appeal} initialValues={{ appealType: "quote_or_report" }}>
           <Form.Item label="申诉类型" name="appealType" rules={[{ required: true }]}><Select options={[{ value: "quote_or_report", label: "引用、反驳或举报被误判" }, { value: "missing_context", label: "缺少关键上下文" }, { value: "joke_or_misunderstanding", label: "玩笑或关系被误解" }, { value: "other", label: "其他" }]} /></Form.Item>
           <Form.Item label="申诉理由" name="reason" rules={[{ required: true, min: 8, message: "请具体说明至少 8 个字" }]}><Input.TextArea rows={3} maxLength={600} showCount placeholder="说明第一次判断可能错在哪里" /></Form.Item>
           <Form.Item label="补充上下文" name="extraContext" rules={[{ required: true, min: 8, message: "请补充能帮助复核的上下文" }]}><Input.TextArea rows={4} maxLength={1000} showCount placeholder="例如引用来自哪一楼、真实对话关系或被遗漏的前文" /></Form.Item>
-          <Button type="primary" htmlType="submit" block>提交申诉并进入人工复核</Button>
+          <Button type="primary" htmlType="submit" loading={submittingAppeal} block>提交申诉并进入人工复核</Button>
         </Form>
       </Modal>
     </div>

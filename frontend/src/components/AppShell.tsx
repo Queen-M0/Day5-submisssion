@@ -10,7 +10,7 @@ import {
   SafetyCertificateOutlined,
   UserOutlined,
 } from "@ant-design/icons";
-import { Avatar, Button, Layout, Menu, Select, Space, Tag, Tooltip, Typography } from "antd";
+import { Alert, Avatar, Button, Layout, Menu, Select, Space, Spin, Tag, Tooltip, Typography } from "antd";
 import { useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -21,7 +21,7 @@ const { Header, Sider, Content } = Layout;
 export function AppShell() {
   const [collapsed, setCollapsed] = useState(false);
   const { user, users, selectUser } = useAuth();
-  const { resetDemo } = useDemo();
+  const { resetDemo, loading, error } = useDemo();
   const location = useLocation();
   const navigate = useNavigate();
   const reviewer = user.role === "reviewer" || user.role === "admin";
@@ -51,8 +51,8 @@ export function AppShell() {
         {!collapsed && <div className="community-chip"><CommentOutlined /><span>AI Native 青年社区</span></div>}
         <Menu mode="inline" theme="dark" selectedKeys={[activeKey]} items={menuItems} onClick={({ key }) => navigate(key)} className="app-menu" />
         <div className={`demo-meta ${collapsed ? "demo-meta-collapsed" : ""}`}>
-          {!collapsed && <><Tag color="geekblue">INTERACTIVE DEMO</Tag><span>前端本地数据 · 可随时重置</span></>}
-          <Tooltip title="重置演示数据"><Button type="text" icon={<ReloadOutlined />} onClick={() => { resetDemo(); navigate(reviewer ? "/reviewer" : "/community"); }} /></Tooltip>
+          {!collapsed && <><Tag color="green">LIVE API</Tag><span>后端数据库实时数据</span></>}
+          <Tooltip title="重新读取后端数据"><Button type="text" loading={loading} icon={<ReloadOutlined />} onClick={() => { resetDemo(); navigate(reviewer ? "/reviewer" : "/community"); }} /></Tooltip>
         </div>
       </Sider>
       <Layout>
@@ -80,7 +80,7 @@ export function AppShell() {
             <Avatar className={reviewer ? "reviewer-avatar" : "user-avatar"}>{user.displayName.slice(0, 1)}</Avatar>
           </Space>
         </Header>
-        <Content className="app-content"><Outlet /></Content>
+        <Content className="app-content">{error && <Alert type="error" showIcon closable message="后端数据加载失败" description={error} style={{ margin: 20 }} />}<Outlet />{loading && <Spin fullscreen tip="正在读取后端数据…" />}</Content>
       </Layout>
     </Layout>
   );

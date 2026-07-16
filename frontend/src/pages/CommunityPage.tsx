@@ -16,6 +16,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useDemo } from "../context/DemoContext";
+import { apiErrorMessage } from "../api/client";
 
 const categories = ["全部话题", "训练营协作", "校园活动", "失物招领"];
 
@@ -23,10 +24,11 @@ export function CommunityPage() {
   const { message } = App.useApp();
   const navigate = useNavigate();
   const { user, users } = useAuth();
-  const { topics, reviewTasks, createTopic } = useDemo();
+  const { topics, reviewTasks, community, createTopic } = useDemo();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("全部话题");
   const [open, setOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [form] = Form.useForm();
 
   const publicTopics = useMemo(() => topics.filter((topic) => topic.floors.some((floor) => floor.floorNumber === 1 && floor.visibleToPublic)), [topics]);
@@ -35,12 +37,19 @@ export function CommunityPage() {
   const pending = reviewTasks.filter((task) => task.status === "pending").length;
   const userName = (id: string) => users.find((item) => item.id === id)?.displayName ?? "社区用户";
 
-  const submitTopic = (values: { title: string; body: string; category: string }) => {
-    const topicId = createTopic({ ...values, authorId: user.id });
-    setOpen(false);
-    form.resetFields();
-    message.success("AI 审核通过，话题已公开并分配 1 楼");
-    navigate(`/topics/${topicId}`);
+  const submitTopic = async (values: { title: string; body: string; category: string }) => {
+    setSubmitting(true);
+    try {
+      const topicId = await createTopic({ ...values, authorId: user.id });
+      setOpen(false);
+      form.resetFields();
+      message.success("话题已提交后端审核");
+      navigate(`/topics/${topicId}`);
+    } catch (error) {
+      message.error(apiErrorMessage(error));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -65,10 +74,10 @@ export function CommunityPage() {
       </section>
 
       <section className="community-stats">
-        <Statistic title="公开话题" value={publicTopics.length} prefix={<CommentOutlined />} />
-        <Statistic title="公开楼层" value={publicFloors} prefix={<FileProtectOutlined />} />
-        <Statistic title="社区成员" value={3} prefix={<TeamOutlined />} />
-        <Statistic title="待人工复核" value={pending} prefix={<ClockCircleOutlined />} />
+        <Statistic title="公开话题" value={community?.topicCount ?? publicTopics.length} prefix={<CommentOutlined />} />
+        <Statistic title="公开楼层" value={community?.publicFloorCount ?? publicFloors} prefix={<FileProtectOutlined />} />
+        <Statistic title="社区成员" value={community?.memberCount ?? 0} prefix={<TeamOutlined />} />
+        <Statistic title="待人工复核" value={community?.pendingReviewCount ?? pending} prefix={<ClockCircleOutlined />} />
       </section>
 
       <div className="community-layout">
@@ -119,7 +128,7 @@ export function CommunityPage() {
           <Form.Item label="话题标题" name="title" rules={[{ required: true, min: 4, message: "请填写至少 4 个字" }]}><Input maxLength={60} showCount placeholder="用一句话说明要讨论什么" /></Form.Item>
           <Form.Item label="话题分类" name="category" rules={[{ required: true }]}><Select options={categories.slice(1).map((item) => ({ label: item, value: item }))} /></Form.Item>
           <Form.Item label="1 楼正文" name="body" rules={[{ required: true, min: 5 }]}><Input.TextArea rows={6} maxLength={2000} showCount placeholder="输入话题正文，提交后将进行上下文审核" /></Form.Item>
-          <Button type="primary" htmlType="submit" block>提交 AI 审核并发布</Button>
+          <Button type="primary" htmlType="submit" loading={submitting} block>提交审核</Button>
         </Form>
       </Modal>
     </div>

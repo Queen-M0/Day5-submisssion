@@ -21,6 +21,9 @@ class ModerationInput:
     author_name: str
     text: str
     parent_text: Optional[str]
+    topic_title: str = ""
+    parent_id: Optional[str] = None
+    parent_author_id: Optional[str] = None
     messages: List[ContextMessage] = field(default_factory=list)
 
 
@@ -30,4 +33,3 @@ class ModerationProvider(ABC):
     @abstractmethod
     def moderate(self, payload: ModerationInput) -> ModerationResult:
         raise NotImplementedError
-

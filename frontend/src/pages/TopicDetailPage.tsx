@@ -8,6 +8,7 @@ import { StatusTag } from "../components/StatusTag";
 import { useAuth } from "../context/AuthContext";
 import { useDemo } from "../context/DemoContext";
 import type { DemoFloor } from "../types";
+import { apiErrorMessage } from "../api/client";
 
 const demoCases = [
   { label: "正常交流", value: "明天活动九点开始，大家记得提前二十分钟到。" },
@@ -35,14 +36,18 @@ export function TopicDetailPage() {
 
   if (!topic) return <div className="page"><Empty description="话题不存在"><Button onClick={() => navigate("/community")}>返回社区</Button></Empty></div>;
 
-  const send = () => {
+  const send = async () => {
     if (!text.trim()) return;
     setSubmitting(true);
-    window.setTimeout(() => {
-      const created = submitFloor({ topicId: topic.id, text: text.trim(), replyToId, authorId: user.id });
+    try {
+      const created = await submitFloor({ topicId: topic.id, text: text.trim(), replyToId, authorId: user.id });
       setText(""); setReplyToId(null); setResult(created); setSubmitting(false);
       message[created.visibleToPublic ? "success" : "warning"](created.moderation.userVisibleReason);
-    }, 650);
+    } catch (error) {
+      message.error(apiErrorMessage(error));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (

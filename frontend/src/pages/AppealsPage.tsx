@@ -23,8 +23,8 @@ export function AppealsPage() {
           <Typography.Text type="secondary">所属话题</Typography.Text><Typography.Title level={4}>{found?.topic.title}</Typography.Title>
           <div className="appealed-content">“{found?.floor.text}”</div>
           <div className="appeal-two-column"><div><span>申诉理由</span><p>{appeal.reason}</p></div><div><span>补充上下文</span><p>{appeal.extraContext}</p></div></div>
-          <Steps current={current} size="small" items={[{ title: "原始限制" }, { title: "提交申诉" }, { title: "AI 反证" }, { title: "人工复核" }, { title: "最终结果" }]} />
-          {appeal.finalReason ? <div className={`final-decision final-${appeal.status}`}><CheckCircleOutlined /><div><strong>审核员最终理由</strong><p>{appeal.finalReason}</p></div></div> : <div className="waiting-review"><ClockCircleOutlined /><span>AI 只提供正反依据，当前等待审核员最终裁决。</span></div>}
+          <Steps current={current} size="small" items={[{ title: "原始限制" }, { title: "提交申诉" }, { title: "材料归档" }, { title: "人工复核" }, { title: "最终结果" }]} />
+          {appeal.finalReason ? <div className={`final-decision final-${appeal.status}`}><CheckCircleOutlined /><div><strong>审核员最终理由</strong><p>{appeal.finalReason}</p></div></div> : <div className="waiting-review"><ClockCircleOutlined /><span>申诉材料已写入后端，当前等待审核员最终裁决。</span></div>}
         </Card>;
       })}
     </div>}

@@ -6,6 +6,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { RiskLevelTag, RiskTag } from "../components/RiskTag";
 import { useAuth } from "../context/AuthContext";
 import { useDemo } from "../context/DemoContext";
+import { apiErrorMessage } from "../api/client";
 
 export function ReviewDetailPage() {
   const { taskId = "" } = useParams();
@@ -24,13 +25,17 @@ export function ReviewDetailPage() {
   const context = topic.floors.filter((item) => item.visibleToPublic || item.id === floor.id).slice(-5);
   const defaultDecision = appeal ? "allow" : "maintain_limit";
 
-  const decide = (values: { decision: "allow" | "maintain_limit" | "need_more_context"; reason: string }) => {
+  const decide = async (values: { decision: "allow" | "maintain_limit" | "need_more_context"; reason: string }) => {
     setSaving(true);
-    window.setTimeout(() => {
-      resolveTask(task.id, values.decision, values.reason);
+    try {
+      await resolveTask(task.id, values.decision, values.reason);
       message.success(values.decision === "allow" ? "已改判允许，内容已分配最新楼层并公开" : "人工复核结论已保存");
-      setSaving(false); navigate("/reviewer/history");
-    }, 450);
+      navigate("/reviewer/history");
+    } catch (error) {
+      message.error(apiErrorMessage(error));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return <div className="review-workspace-page">
@@ -55,8 +60,8 @@ export function ReviewDetailPage() {
         {appeal && <div className="counter-analysis">
           <div className="counter-title"><RobotOutlined /><div><strong>申诉反证 AI</strong><small>主动挑战第一次判断，不直接给出终审结果</small></div></div>
           <div className="appeal-copy"><span>用户申诉</span><p>{appeal.reason}</p><small>补充上下文：{appeal.extraContext}</small></div>
-          <div className="argument-grid"><div className="argument-original"><strong><CloseCircleOutlined /> 支持维持原判</strong>{appeal.counterAnalysis.supportsOriginalDecision.map((item) => <p key={item}>{item}</p>)}</div><div className="argument-change"><strong><CheckCircleOutlined /> 支持改判</strong>{appeal.counterAnalysis.supportsChange.map((item) => <p key={item}>{item}</p>)}</div></div>
-          <div className="counter-conclusion"><span>新证据影响</span><p>{appeal.counterAnalysis.newEvidenceImpact}</p><strong>{appeal.counterAnalysis.reviewSuggestion}</strong></div>
+          {appeal.counterAnalysis ? <><div className="argument-grid"><div className="argument-original"><strong><CloseCircleOutlined /> 支持维持原判</strong>{appeal.counterAnalysis.supportsOriginalDecision.map((item) => <p key={item}>{item}</p>)}</div><div className="argument-change"><strong><CheckCircleOutlined /> 支持改判</strong>{appeal.counterAnalysis.supportsChange.map((item) => <p key={item}>{item}</p>)}</div></div>
+          <div className="counter-conclusion"><span>新证据影响</span><p>{appeal.counterAnalysis.newEvidenceImpact}</p><strong>{appeal.counterAnalysis.reviewSuggestion}</strong></div></> : <Alert type="info" showIcon message="申诉反证 Agent 暂未接入" description="当前仅保存用户申诉理由和补充上下文，由审核员直接进行人工判断。" />}
         </div>}
       </section>
 

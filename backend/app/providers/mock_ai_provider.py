@@ -15,7 +15,7 @@ class MockAIProvider(ModerationProvider):
     insult_terms = ("废物", "垃圾", "蠢货", "没用", "什么货色")
     threat_terms = ("放学等着", "让你后悔", "弄死", "报复你")
     fraud_terms = ("私人账户", "统一转账", "取消资格", "验证码", "刷单返利")
-    implicit_terms = ("懂的都懂", "大聪明", "班级巨婴", "不点名", "装领导", "拖后腿")
+    implicit_terms = ("大家都看看", "懂的都懂", "大聪明", "班级巨婴", "不点名", "装领导", "拖后腿")
 
     def moderate(self, payload: ModerationInput) -> ModerationResult:
         text = payload.text

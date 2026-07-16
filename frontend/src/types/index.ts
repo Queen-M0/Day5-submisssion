@@ -173,7 +173,7 @@ export interface DemoAppeal {
   extraContext: string;
   status: "submitted" | "reviewing" | "approved" | "rejected" | "need_more_context";
   createdAt: string;
-  counterAnalysis: CounterAnalysis;
+  counterAnalysis: CounterAnalysis | null;
   finalReason?: string;
 }
 
@@ -196,3 +196,138 @@ export interface DemoState {
   reviewTasks: DemoReviewTask[];
 }
 
+export interface CommunitySummary {
+  id: string;
+  title: string;
+  description: string;
+  topicCount: number;
+  publicFloorCount: number;
+  memberCount: number;
+  pendingReviewCount: number;
+}
+
+export interface ApiTopic {
+  id: string;
+  sceneId: string;
+  title: string;
+  summary: string;
+  category: string;
+  author: DemoUser;
+  status: string;
+  visibleToPublic: boolean;
+  publicFloorCount: number;
+  viewCount: number;
+  lastReplyAuthorName: string | null;
+  createdAt: string;
+  lastActiveAt: string;
+}
+
+export interface ApiModeration {
+  riskLevel: number;
+  riskScore: number;
+  riskTypes: string[];
+  decision: string;
+  suggestedAction: "allow" | "limit" | "manual_review";
+  systemDecision: "publish" | "limit" | "manual_review";
+  confidence: number;
+  contextTags: string[];
+  intent: string;
+  targetUserIds: string[];
+  contextUsed: string[];
+  uncertainties: string[];
+  evidence: DemoEvidence[];
+  evidenceValid: boolean;
+  userVisibleReason: string;
+  reviewerReason?: string;
+  failureReason?: string | null;
+}
+
+export interface ApiContent {
+  id: string;
+  sceneId: string;
+  topicId: string;
+  floorNumber: number | null;
+  contentType: string;
+  author: DemoUser;
+  parentId: string | null;
+  text: string;
+  status: DemoContentStatus;
+  visibleToPublic: boolean;
+  createdAt: string;
+  moderation: ApiModeration | null;
+  topic?: Pick<ApiTopic, "id" | "title" | "category">;
+  appealable?: boolean;
+}
+
+export interface ApiTimelineEvent {
+  id: string;
+  actor: string;
+  action: string;
+  title?: string;
+  description: string;
+  createdAt: string;
+}
+
+export interface ApiAppeal {
+  id: string;
+  contentId: string;
+  contentText: string;
+  topic: Pick<ApiTopic, "id" | "title" | "category">;
+  appealType: string;
+  reason: string;
+  extraContext: string;
+  status: "submitted" | "reviewing" | "approved" | "rejected" | "need_more_context";
+  counterAnalysis: CounterAnalysis | null;
+  finalReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ApiReviewTask {
+  taskId: string;
+  contentId: string;
+  appealId: string | null;
+  source: "ai_escalation" | "user_appeal";
+  priority: "normal" | "high";
+  status: "pending" | "resolved";
+  topicTitle: string;
+  contentText: string;
+  authorName: string;
+  riskLevel: number;
+  riskScore: number;
+  riskTypes: string[];
+  contextTags: string[];
+  evidenceCount: number;
+  createdAt: string;
+  resolvedAt?: string;
+  finalDecision?: "allow" | "maintain_limit" | "need_more_context";
+  reviewReason?: string;
+}
+
+export interface ApiReviewTaskDetail {
+  taskId: string;
+  topic: ApiTopic;
+  content: ApiContent;
+  replyTo: ApiContent | null;
+  context: ApiContent[];
+  moderation: ApiModeration;
+  evidenceValidation: { valid: boolean; items: DemoEvidence[] };
+  appeal: null | {
+    id: string;
+    appealType: string;
+    reason: string;
+    extraContext: string;
+    status: string;
+    createdAt: string;
+  };
+  counterAnalysis: CounterAnalysis | null;
+  timeline: ApiTimelineEvent[];
+}
+
+export interface ContentCreationResult {
+  contentId: string;
+  status: DemoContentStatus;
+  floorNumber: number | null;
+  visibleToPublic: boolean;
+  moderation: ApiModeration;
+}

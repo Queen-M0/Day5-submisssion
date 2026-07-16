@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.database import get_db
-from app.models import Appeal, AuditLog, Content
+from app.models import Appeal, AuditLog, Content, ManualReview, Topic
 from app.schemas.requests import SubmitAppealRequest
 from app.services.auth_service import demo_user_id, get_current_user
 from app.services.serializers import iso_utc
@@ -41,6 +41,8 @@ def submit_appeal(
         user_id=user.id,
         appeal_type=payload.appeal_type,
         reason=payload.reason,
+        extra_context=payload.extra_context.strip(),
+        counter_analysis={},
         status="submitted",
     )
     content.status = "appeal_submitted"
@@ -50,13 +52,18 @@ def submit_appeal(
             id=str(uuid4()),
             actor_id=user.id,
             action="appeal.submitted",
-            entity_type="appeal",
-            entity_id=appeal.id,
-            detail={"contentId": content.id, "appealType": payload.appeal_type},
+            entity_type="content",
+            entity_id=content.id,
+            detail={"appealId": appeal.id, "appealType": payload.appeal_type},
         )
     )
     db.commit()
-    return {"appealId": appeal.id, "status": appeal.status, "message": "申诉已提交，等待审核人员复核。"}
+    return {
+        "appealId": appeal.id,
+        "status": appeal.status,
+        "contentStatus": content.status,
+        "message": "申诉已提交，等待人工复核。",
+    }
 
 
 @router.get("/me/appeals")
@@ -67,19 +74,34 @@ def list_my_appeals(
     user = get_current_user(db, user_id)
     appeals = db.scalars(
         select(Appeal)
-        .options(joinedload(Appeal.content))
+        .options(joinedload(Appeal.content).joinedload(Content.topic).joinedload(Topic.author))
         .where(Appeal.user_id == user.id)
         .order_by(Appeal.created_at.desc())
     ).all()
+    appeal_ids = [appeal.id for appeal in appeals]
+    reviews = {
+        review.appeal_id: review
+        for review in db.scalars(
+            select(ManualReview).where(ManualReview.appeal_id.in_(appeal_ids)).order_by(ManualReview.created_at.desc())
+        ).all()
+    } if appeal_ids else {}
     return {
         "items": [
             {
                 "id": appeal.id,
                 "contentId": appeal.content_id,
                 "contentText": appeal.content.text,
+                "topic": {
+                    "id": appeal.content.topic.id,
+                    "title": appeal.content.topic.title,
+                    "category": appeal.content.topic.category,
+                },
                 "appealType": appeal.appeal_type,
                 "reason": appeal.reason,
+                "extraContext": appeal.extra_context,
                 "status": appeal.status,
+                "counterAnalysis": appeal.counter_analysis or None,
+                "finalReason": reviews[appeal.id].review_reason if appeal.id in reviews else None,
                 "createdAt": iso_utc(appeal.created_at),
                 "updatedAt": iso_utc(appeal.updated_at),
             }

@@ -13,9 +13,13 @@ class ContextService:
             db.scalars(
                 select(Content)
                 .options(joinedload(Content.author))
-                .where(Content.scene_id == content.scene_id, Content.created_at <= content.created_at)
+                .where(
+                    Content.topic_id == content.topic_id,
+                    Content.visible_to_public.is_(True),
+                    Content.created_at < content.created_at,
+                )
                 .order_by(Content.created_at.desc())
-                .limit(11)
+                .limit(5)
             ).all()
         )
         messages.reverse()
@@ -28,7 +32,6 @@ class ContextService:
                 parent_id=item.parent_id,
             )
             for item in messages
-            if item.id != content.id
         ]
         parent_text: Optional[str] = content.parent.text if content.parent else None
         return ModerationInput(
@@ -37,6 +40,8 @@ class ContextService:
             author_name=content.author.display_name,
             text=content.text,
             parent_text=parent_text,
+            topic_title=content.topic.title,
+            parent_id=content.parent_id,
+            parent_author_id=content.parent.author_id if content.parent else None,
             messages=context,
         )
-
