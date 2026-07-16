@@ -4,3 +4,4 @@
 *.swo
 __pycache__/
 .env
+.mimocode/
