@@ -87,3 +87,112 @@ export interface ReviewTaskDetail {
   };
 }
 
+export type DemoContentStatus =
+  | "published"
+  | "limited"
+  | "pending_manual_review"
+  | "appeal_submitted"
+  | "appeal_reviewing"
+  | "appeal_approved"
+  | "appeal_rejected"
+  | "need_more_context";
+
+export interface DemoEvidence {
+  contentId: string;
+  quote: string;
+  reason: string;
+  verified: boolean;
+}
+
+export interface DemoModeration {
+  riskLevel: 0 | 1 | 2 | 3;
+  riskScore: number;
+  riskTypes: string[];
+  contextTags: string[];
+  intent: string;
+  targetUserIds: string[];
+  evidence: DemoEvidence[];
+  contextUsed: string[];
+  uncertainties: string[];
+  confidence: number;
+  suggestedAction: "allow" | "limit" | "manual_review";
+  systemDecision: "publish" | "limit" | "manual_review";
+  userVisibleReason: string;
+  reviewerReason: string;
+}
+
+export interface AuditEvent {
+  id: string;
+  time: string;
+  actor: string;
+  title: string;
+  description: string;
+  tone: "success" | "warning" | "danger" | "info";
+}
+
+export interface DemoFloor {
+  id: string;
+  topicId: string;
+  floorNumber: number | null;
+  authorId: string;
+  text: string;
+  replyToId: string | null;
+  createdAt: string;
+  status: DemoContentStatus;
+  visibleToPublic: boolean;
+  moderation: DemoModeration;
+  auditTrail: AuditEvent[];
+}
+
+export interface DemoTopic {
+  id: string;
+  title: string;
+  summary: string;
+  category: string;
+  authorId: string;
+  createdAt: string;
+  lastActiveAt: string;
+  viewCount: number;
+  floors: DemoFloor[];
+}
+
+export interface CounterAnalysis {
+  supportsOriginalDecision: string[];
+  supportsChange: string[];
+  newEvidenceImpact: string;
+  remainingUncertainties: string[];
+  reviewSuggestion: string;
+}
+
+export interface DemoAppeal {
+  id: string;
+  contentId: string;
+  authorId: string;
+  appealType: string;
+  reason: string;
+  extraContext: string;
+  status: "submitted" | "reviewing" | "approved" | "rejected" | "need_more_context";
+  createdAt: string;
+  counterAnalysis: CounterAnalysis;
+  finalReason?: string;
+}
+
+export interface DemoReviewTask {
+  id: string;
+  contentId: string;
+  appealId: string | null;
+  source: "ai_escalation" | "user_appeal";
+  priority: "normal" | "high";
+  status: "pending" | "resolved";
+  createdAt: string;
+  resolvedAt?: string;
+  finalDecision?: "allow" | "maintain_limit" | "need_more_context";
+  reviewReason?: string;
+}
+
+export interface DemoState {
+  topics: DemoTopic[];
+  appeals: DemoAppeal[];
+  reviewTasks: DemoReviewTask[];
+}
+

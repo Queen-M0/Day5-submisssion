@@ -22,6 +22,7 @@ def database():
     seed()
     yield
     Base.metadata.drop_all(bind=engine)
+    engine.dispose()
     Path("test_contextguard.db").unlink(missing_ok=True)
 
 

@@ -9,6 +9,10 @@ const riskLabels: Record<string, string> = {
   fraud: "诈骗",
   privacy: "隐私",
   safe_context: "安全语境",
+  repeated_targeting: "持续针对",
+  group_pressure: "群体施压",
+  quote: "引用语境",
+  counter_speech: "反对攻击",
 };
 
 export function RiskTag({ type }: { type: string }) {

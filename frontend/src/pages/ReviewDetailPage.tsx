@@ -1,172 +1,82 @@
-import { ArrowLeftOutlined, CheckOutlined } from "@ant-design/icons";
-import {
-  Alert,
-  App,
-  Button,
-  Descriptions,
-  Form,
-  Input,
-  Progress,
-  Radio,
-  Select,
-  Space,
-  Spin,
-  Timeline,
-  Typography,
-} from "antd";
+import { ArrowLeftOutlined, CheckCircleOutlined, CloseCircleOutlined, RobotOutlined, SafetyCertificateOutlined } from "@ant-design/icons";
+import { Alert, App, Avatar, Button, Descriptions, Empty, Form, Input, Progress, Radio, Space, Tag, Timeline, Typography } from "antd";
 import dayjs from "dayjs";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { getReviewTask, submitReview } from "../api";
 import { RiskLevelTag, RiskTag } from "../components/RiskTag";
-import type { ReviewTaskDetail } from "../types";
+import { useAuth } from "../context/AuthContext";
+import { useDemo } from "../context/DemoContext";
 
 export function ReviewDetailPage() {
-  const { message } = App.useApp();
   const { taskId = "" } = useParams();
   const navigate = useNavigate();
-  const [detail, setDetail] = useState<ReviewTaskDetail | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { message } = App.useApp();
+  const { users } = useAuth();
+  const { reviewTasks, findFloor, findAppeal, resolveTask } = useDemo();
+  const task = reviewTasks.find((item) => item.id === taskId);
+  const found = task ? findFloor(task.contentId) : undefined;
+  const appeal = found ? findAppeal(found.floor.id) : undefined;
   const [saving, setSaving] = useState(false);
-  const [form] = Form.useForm();
+  const userName = (id: string) => users.find((item) => item.id === id)?.displayName ?? "社区用户";
 
-  useEffect(() => {
-    getReviewTask(taskId)
-      .then(setDetail)
-      .catch(() => message.error("复核任务不存在或已被处理"))
-      .finally(() => setLoading(false));
-  }, [message, taskId]);
+  if (!task || !found) return <div className="page"><Empty description="复核任务不存在"><Button onClick={() => navigate("/reviewer")}>返回队列</Button></Empty></div>;
+  const { topic, floor } = found;
+  const context = topic.floors.filter((item) => item.visibleToPublic || item.id === floor.id).slice(-5);
+  const defaultDecision = appeal ? "allow" : "maintain_limit";
 
-  const decide = async (values: {
-    finalDecision: string;
-    finalRiskLevel: number;
-    correctionType: string;
-    reviewReason: string;
-  }) => {
+  const decide = (values: { decision: "allow" | "maintain_limit" | "need_more_context"; reason: string }) => {
     setSaving(true);
-    try {
-      await submitReview(taskId, values);
-      message.success("人工复核结论已保存");
-      navigate("/reviewer");
-    } catch {
-      message.error("保存失败，该任务可能已经处理");
-    } finally { setSaving(false); }
+    window.setTimeout(() => {
+      resolveTask(task.id, values.decision, values.reason);
+      message.success(values.decision === "allow" ? "已改判允许，内容已分配最新楼层并公开" : "人工复核结论已保存");
+      setSaving(false); navigate("/reviewer/history");
+    }, 450);
   };
 
-  if (loading) return <Spin fullscreen tip="正在加载完整上下文" />;
-  if (!detail) return null;
-  const { moderation, content, appeal } = detail;
+  return <div className="review-workspace-page">
+    <header className="workspace-header"><Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate("/reviewer")}>返回队列</Button><div><Typography.Text type="secondary">{topic.title}</Typography.Text><Typography.Title level={3}>复核任务 · {task.source === "user_appeal" ? "用户申诉" : "AI 主动转人工"}</Typography.Title></div><Space><Tag color={task.priority === "high" ? "red" : "gold"}>{task.priority === "high" ? "高优先级" : "普通优先级"}</Tag><Tag>{task.id}</Tag></Space></header>
+    <div className="review-workspace-grid">
+      <section className="workspace-panel context-panel">
+        <div className="workspace-panel-title"><span>01</span><div><strong>原始上下文</strong><small>最近 5 楼与回复关系</small></div></div>
+        <div className="current-content-box"><span>当前待复核内容 · {userName(floor.authorId)}</span><p>{floor.text}</p></div>
+        <Timeline items={context.map((item) => ({ color: item.id === floor.id ? "red" : "gray", children: <div className={item.id === floor.id ? "context-message current" : "context-message"}><div><Space><Avatar size="small">{userName(item.authorId).slice(0, 1)}</Avatar><strong>{userName(item.authorId)}</strong></Space><small>{item.floorNumber ? `${item.floorNumber} 楼` : "待审"} · {dayjs(item.createdAt).format("HH:mm")}</small></div><p>{item.text}</p>{item.replyToId && <em>回复内容 ID：{item.replyToId}</em>}</div> }))} />
+      </section>
 
-  return (
-    <div className="review-detail-page">
-      <div className="review-detail-header">
-        <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate("/reviewer")}>返回队列</Button>
-        <div>
-          <Typography.Title level={3}>人工复核</Typography.Title>
-          <Typography.Text type="secondary">任务 {taskId.slice(0, 20)}</Typography.Text>
-        </div>
-      </div>
-      <div className="review-grid">
-        <section className="review-column context-column">
-          <div className="column-heading">
-            <Typography.Title level={5}>上下文时间线</Typography.Title>
-            <Typography.Text type="secondary">最近 {detail.context.length} 条</Typography.Text>
-          </div>
-          <Timeline
-            items={detail.context.map((item) => ({
-              color: item.id === content.id ? "red" : "gray",
-              children: (
-                <div className={item.id === content.id ? "timeline-current" : "timeline-message"}>
-                  <div className="timeline-meta">
-                    <Typography.Text strong>{item.author.displayName}</Typography.Text>
-                    <Typography.Text type="secondary">{dayjs(item.createdAt).format("HH:mm")}</Typography.Text>
-                  </div>
-                  <Typography.Paragraph>{item.text}</Typography.Paragraph>
-                </div>
-              ),
-            }))}
-          />
-        </section>
+      <section className="workspace-panel analysis-panel">
+        <div className="workspace-panel-title"><span>02</span><div><strong>AI 初审与证据校验</strong><small>建议不是最终裁决</small></div></div>
+        <div className="ai-summary"><RiskLevelTag level={floor.moderation.riskLevel} /><div><Progress percent={floor.moderation.riskScore} strokeColor={floor.moderation.riskLevel >= 3 ? "#c2413b" : "#c98322"} /><small>置信度 {Math.round(floor.moderation.confidence * 100)}%</small></div></div>
+        <Space wrap>{floor.moderation.riskTypes.map((type) => <RiskTag key={type} type={type} />)}{floor.moderation.contextTags.map((type) => <RiskTag key={type} type={type} />)}</Space>
+        <Descriptions column={1} size="small" className="review-descriptions">
+          <Descriptions.Item label="说话者">{userName(floor.authorId)}</Descriptions.Item><Descriptions.Item label="涉及对象">{floor.moderation.targetUserIds.map(userName).join("、") || "未识别特定对象"}</Descriptions.Item><Descriptions.Item label="表达意图">{floor.moderation.intent}</Descriptions.Item><Descriptions.Item label="AI 建议">{floor.moderation.suggestedAction.toUpperCase()}</Descriptions.Item><Descriptions.Item label="系统分流">{floor.moderation.systemDecision.toUpperCase()}</Descriptions.Item>
+        </Descriptions>
+        <Typography.Title level={5}>证据真实性校验</Typography.Title>
+        {floor.moderation.evidence.map((item) => <div className="review-evidence" key={item.quote}><div><CheckCircleOutlined /> 已定位 · {item.contentId}</div><blockquote>{item.quote}</blockquote><p>{item.reason}</p></div>)}
+        <Alert type="warning" showIcon message="仍有不确定点" description={floor.moderation.uncertainties.join("；") || "暂无"} />
+        {appeal && <div className="counter-analysis">
+          <div className="counter-title"><RobotOutlined /><div><strong>申诉反证 AI</strong><small>主动挑战第一次判断，不直接给出终审结果</small></div></div>
+          <div className="appeal-copy"><span>用户申诉</span><p>{appeal.reason}</p><small>补充上下文：{appeal.extraContext}</small></div>
+          <div className="argument-grid"><div className="argument-original"><strong><CloseCircleOutlined /> 支持维持原判</strong>{appeal.counterAnalysis.supportsOriginalDecision.map((item) => <p key={item}>{item}</p>)}</div><div className="argument-change"><strong><CheckCircleOutlined /> 支持改判</strong>{appeal.counterAnalysis.supportsChange.map((item) => <p key={item}>{item}</p>)}</div></div>
+          <div className="counter-conclusion"><span>新证据影响</span><p>{appeal.counterAnalysis.newEvidenceImpact}</p><strong>{appeal.counterAnalysis.reviewSuggestion}</strong></div>
+        </div>}
+      </section>
 
-        <section className="review-column analysis-column">
-          <div className="column-heading"><Typography.Title level={5}>AI 初审分析</Typography.Title></div>
-          <div className="risk-overview">
-            <RiskLevelTag level={moderation.riskLevel} />
-            <Progress
-              percent={moderation.riskScore}
-              size="small"
-              strokeColor={moderation.riskLevel >= 3 ? "#c23b32" : "#d97706"}
-              format={(value) => `${value} 分`}
-            />
-          </div>
-          <Space wrap className="tag-row">
-            {moderation.riskTypes.map((type) => <RiskTag key={type} type={type} />)}
-          </Space>
-          <Descriptions column={1} size="small" className="analysis-descriptions">
-            <Descriptions.Item label="AI 建议">{moderation.decision}</Descriptions.Item>
-            <Descriptions.Item label="置信度">{Math.round(moderation.confidence * 100)}%</Descriptions.Item>
-            <Descriptions.Item label="上下文判断">{moderation.contextReasoning}</Descriptions.Item>
-          </Descriptions>
-          <div className="evidence-list">
-            <Typography.Text strong>证据片段</Typography.Text>
-            {moderation.evidence?.length ? moderation.evidence.map((item, index) => (
-              <div className="evidence-item" key={`${item.text}-${index}`}>
-                <Typography.Text mark>{item.text}</Typography.Text>
-                <Typography.Paragraph type="secondary">{item.reason}</Typography.Paragraph>
-              </div>
-            )) : <Typography.Paragraph type="secondary">未提取到明确风险证据</Typography.Paragraph>}
-          </div>
-          <Alert type="warning" showIcon message="审核员提示" description={moderation.reviewerReason} />
-          {appeal && (
-            <div className="appeal-panel">
-              <Typography.Text strong>用户申诉</Typography.Text>
-              <Typography.Paragraph>{appeal.reason}</Typography.Paragraph>
-              <Typography.Text type="secondary">类型：{appeal.appealType}</Typography.Text>
-            </div>
-          )}
-        </section>
-
-        <section className="review-column decision-column">
-          <div className="column-heading"><Typography.Title level={5}>人工结论</Typography.Title></div>
-          <Form
-            form={form}
-            layout="vertical"
-            initialValues={{ finalDecision: "publish", finalRiskLevel: moderation.riskLevel, correctionType: "false_positive_context" }}
-            onFinish={(values) => void decide(values)}
-          >
-            <Form.Item name="finalDecision" label="处理结果" rules={[{ required: true }]}>
-              <Radio.Group className="decision-radio">
-                <Radio.Button value="publish">改为发布</Radio.Button>
-                <Radio.Button value="maintain_limit">维持限制</Radio.Button>
-                <Radio.Button value="require_edit">要求修改</Radio.Button>
-                <Radio.Button value="escalate">升级风险</Radio.Button>
+      <section className="workspace-panel decision-panel">
+        <div className="workspace-panel-title"><span>03</span><div><strong>人工最终裁决</strong><small>必须填写可追溯理由</small></div></div>
+        {task.status === "resolved" ? <Alert type="success" showIcon message="该任务已完成" description={task.reviewReason} /> : <>
+          <div className="human-boundary"><SafetyCertificateOutlined /><p><strong>人工责任边界</strong><br />请依据原文和上下文独立判断，不把 AI 分数当作结论。</p></div>
+          <Form layout="vertical" initialValues={{ decision: defaultDecision }} onFinish={decide}>
+            <Form.Item name="decision" label="最终处理结果" rules={[{ required: true }]}>
+              <Radio.Group className="decision-card-group">
+                <Radio value="allow"><strong>允许公开</strong><small>改判或确认安全，分配最新楼层</small></Radio>
+                <Radio value="maintain_limit"><strong>维持限制</strong><small>证据充分，内容继续不公开</small></Radio>
+                <Radio value="need_more_context"><strong>要求补充</strong><small>信息不足，暂不做强结论</small></Radio>
               </Radio.Group>
             </Form.Item>
-            <Form.Item name="finalRiskLevel" label="最终风险等级" rules={[{ required: true }]}>
-              <Select options={[
-                { value: 0, label: "L0 安全" },
-                { value: 1, label: "L1 低风险" },
-                { value: 2, label: "L2 中风险" },
-                { value: 3, label: "L3 高风险" },
-              ]} />
-            </Form.Item>
-            <Form.Item name="correctionType" label="校正类型" rules={[{ required: true }]}>
-              <Select options={[
-                { value: "correct", label: "AI 判断正确" },
-                { value: "false_positive_quote", label: "引用语境误判" },
-                { value: "false_positive_context", label: "上下文误判" },
-                { value: "false_positive_joke", label: "玩笑误判" },
-                { value: "false_negative_implicit", label: "隐晦攻击漏判" },
-                { value: "policy_unclear", label: "规则不明确" },
-              ]} />
-            </Form.Item>
-            <Form.Item name="reviewReason" label="复核理由" rules={[{ required: true, min: 5, message: "请填写可追溯的复核理由" }]}>
-              <Input.TextArea rows={7} maxLength={1000} showCount placeholder="说明采用了哪些上下文证据，以及维持或改判的原因" />
-            </Form.Item>
-            <Button type="primary" htmlType="submit" icon={<CheckOutlined />} loading={saving} block>保存最终结论</Button>
+            <Form.Item name="reason" label="具体复核理由" rules={[{ required: true, min: 10, message: "请至少填写 10 个字，说明使用了哪些上下文" }]}><Input.TextArea rows={7} maxLength={1000} showCount placeholder="例如：补充上下文证明攻击性片段属于引用，作者后半句明确表达反对，因此改判允许。" /></Form.Item>
+            <Button type="primary" htmlType="submit" loading={saving} block>保存人工结论并写入时间线</Button>
           </Form>
-        </section>
-      </div>
+        </>}
+      </section>
     </div>
-  );
+  </div>;
 }

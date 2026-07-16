@@ -5,12 +5,15 @@ import { AppShell } from "./components/AppShell";
 import { useAuth } from "./context/AuthContext";
 import { AppealsPage } from "./pages/AppealsPage";
 import { CommunityPage } from "./pages/CommunityPage";
+import { MyPostsPage } from "./pages/MyPostsPage";
 import { ReviewDetailPage } from "./pages/ReviewDetailPage";
+import { ReviewHistoryPage } from "./pages/ReviewHistoryPage";
 import { ReviewerDashboard } from "./pages/ReviewerDashboard";
+import { TopicDetailPage } from "./pages/TopicDetailPage";
 
 function HomeRedirect() {
   const { user } = useAuth();
-  return <Navigate to={user?.role === "user" ? "/community" : "/reviewer"} replace />;
+  return <Navigate to={user.role === "user" ? "/community" : "/reviewer"} replace />;
 }
 
 export default function App() {
@@ -19,18 +22,20 @@ export default function App() {
       locale={zhCN}
       theme={{
         token: {
-          colorPrimary: "#167a5b",
-          colorInfo: "#167a5b",
-          colorSuccess: "#27825f",
-          colorWarning: "#c97812",
-          colorError: "#c23b32",
-          borderRadius: 6,
-          fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+          colorPrimary: "#3154a5",
+          colorInfo: "#3154a5",
+          colorSuccess: "#16856a",
+          colorWarning: "#c98322",
+          colorError: "#c2413b",
+          borderRadius: 10,
+          fontFamily: "Inter, 'PingFang SC', 'Microsoft YaHei', ui-sans-serif, system-ui, sans-serif",
+          colorText: "#172033",
         },
         components: {
-          Layout: { bodyBg: "#f4f6f6", headerBg: "#ffffff", siderBg: "#14241f" },
-          Menu: { darkItemBg: "#14241f", itemBorderRadius: 5 },
-          Button: { borderRadius: 5 },
+          Layout: { bodyBg: "#f5f7fb", headerBg: "rgba(255,255,255,.94)", siderBg: "#101a32" },
+          Menu: { darkItemBg: "#101a32", darkItemSelectedBg: "#294a91", itemBorderRadius: 8 },
+          Button: { borderRadius: 8, controlHeight: 38 },
+          Card: { borderRadiusLG: 12 },
         },
       }}
     >
@@ -39,8 +44,11 @@ export default function App() {
           <Route element={<AppShell />}>
             <Route index element={<HomeRedirect />} />
             <Route path="community" element={<CommunityPage />} />
+            <Route path="topics/:topicId" element={<TopicDetailPage />} />
+            <Route path="my-posts" element={<MyPostsPage />} />
             <Route path="appeals" element={<AppealsPage />} />
             <Route path="reviewer" element={<ReviewerDashboard />} />
+            <Route path="reviewer/history" element={<ReviewHistoryPage />} />
             <Route path="reviewer/:taskId" element={<ReviewDetailPage />} />
           </Route>
           <Route path="*" element={<HomeRedirect />} />
@@ -49,4 +57,3 @@ export default function App() {
     </ConfigProvider>
   );
 }
-

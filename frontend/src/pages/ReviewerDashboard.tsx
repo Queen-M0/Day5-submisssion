@@ -1,77 +1,48 @@
-import { ArrowRightOutlined, InboxOutlined, ReloadOutlined } from "@ant-design/icons";
-import { App, Button, Empty, List, Space, Spin, Statistic, Tag, Typography } from "antd";
+import { ArrowRightOutlined, ExclamationCircleOutlined, InboxOutlined, RobotOutlined, SafetyCertificateOutlined, UserSwitchOutlined } from "@ant-design/icons";
+import { Button, Card, Empty, Progress, Segmented, Space, Statistic, Tag, Typography } from "antd";
 import dayjs from "dayjs";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getReviewTasks } from "../api";
 import { RiskLevelTag, RiskTag } from "../components/RiskTag";
-import type { ReviewTask } from "../types";
+import { useAuth } from "../context/AuthContext";
+import { useDemo } from "../context/DemoContext";
 
 export function ReviewerDashboard() {
-  const { message } = App.useApp();
   const navigate = useNavigate();
-  const [tasks, setTasks] = useState<ReviewTask[]>([]);
-  const [loading, setLoading] = useState(true);
-  const load = useCallback(async () => {
-    setLoading(true);
-    try { setTasks(await getReviewTasks()); }
-    catch { message.error("审核任务加载失败，请确认当前身份具有审核权限"); }
-    finally { setLoading(false); }
-  }, [message]);
-  useEffect(() => { void load(); }, [load]);
+  const { users } = useAuth();
+  const { reviewTasks, findFloor, findAppeal } = useDemo();
+  const [filter, setFilter] = useState("全部任务");
+  const pending = reviewTasks.filter((task) => task.status === "pending");
+  const tasks = filter === "用户申诉" ? pending.filter((task) => task.source === "user_appeal") : filter === "AI 转人工" ? pending.filter((task) => task.source === "ai_escalation") : pending;
+  const stats = useMemo(() => ({ appeals: pending.filter((item) => item.source === "user_appeal").length, escalations: pending.filter((item) => item.source === "ai_escalation").length, high: pending.filter((item) => findFloor(item.contentId)?.floor.moderation.riskLevel === 3).length }), [findFloor, pending]);
+  const userName = (id: string) => users.find((item) => item.id === id)?.displayName ?? "社区用户";
 
-  const stats = useMemo(() => ({
-    total: tasks.length,
-    appeals: tasks.filter((item) => item.hasAppeal).length,
-    high: tasks.filter((item) => item.riskLevel >= 3).length,
-  }), [tasks]);
-
-  return (
-    <div className="page reviewer-page">
-      <section className="page-heading">
-        <div>
-          <Typography.Title level={2}>审核工作台</Typography.Title>
-          <Typography.Paragraph type="secondary">集中处理复杂语境与用户申诉，人工结论将覆盖系统初判。</Typography.Paragraph>
-        </div>
-        <Button icon={<ReloadOutlined />} onClick={() => void load()}>刷新队列</Button>
-      </section>
-      <section className="stats-band">
-        <Statistic title="待处理" value={stats.total} />
-        <Statistic title="用户申诉" value={stats.appeals} />
-        <Statistic title="高风险" value={stats.high} />
-        <Statistic title="当前 Provider" value="Mock AI" valueStyle={{ fontSize: 20 }} />
-      </section>
-      <section className="review-queue">
-        <div className="section-title-row">
-          <Typography.Title level={4}>待复核队列</Typography.Title>
-          <Typography.Text type="secondary">按进入队列时间排序</Typography.Text>
-        </div>
-        <Spin spinning={loading}>
-          {tasks.length === 0 ? <Empty image={<InboxOutlined className="large-empty-icon" />} description="当前没有待处理任务" /> : (
-            <List
-              dataSource={tasks}
-              renderItem={(task) => (
-                <List.Item className="task-row" onClick={() => navigate(`/reviewer/${task.taskId}`)}>
-                  <div className="task-risk"><RiskLevelTag level={task.riskLevel} /></div>
-                  <div className="task-main">
-                    <div className="task-topline">
-                      <Space wrap>
-                        <Typography.Text strong>{task.authorName}</Typography.Text>
-                        {task.hasAppeal && <Tag color="blue">用户申诉</Tag>}
-                        {task.riskTypes.map((type) => <RiskTag key={type} type={type} />)}
-                      </Space>
-                      <Typography.Text type="secondary">{dayjs(task.createdAt).format("MM-DD HH:mm")}</Typography.Text>
-                    </div>
-                    <Typography.Paragraph className="task-content" ellipsis={{ rows: 2 }}>{task.contentText}</Typography.Paragraph>
-                    <Typography.Text type="secondary">{task.summary}</Typography.Text>
-                  </div>
-                  <Button type="text" icon={<ArrowRightOutlined />} aria-label="进入复核详情" />
-                </List.Item>
-              )}
-            />
-          )}
-        </Spin>
-      </section>
-    </div>
-  );
+  return <div className="page reviewer-dashboard-page">
+    <section className="reviewer-hero"><div><Space className="eyebrow"><SafetyCertificateOutlined /> HUMAN IN THE LOOP</Space><Typography.Title level={2}>人工审核工作台</Typography.Title><Typography.Paragraph>同时查看原始上下文、AI 证据和用户申诉。AI 只提供分析，最终决定必须由审核员填写具体理由。</Typography.Paragraph></div><div className="reviewer-duty"><strong>今日复核原则</strong><span>先确认说话者与对象，再判断意图；上下文不足时不武断裁决。</span></div></section>
+    <section className="reviewer-stats">
+      <Statistic title="待复核总数" value={pending.length} prefix={<InboxOutlined />} />
+      <Statistic title="用户申诉" value={stats.appeals} prefix={<UserSwitchOutlined />} />
+      <Statistic title="AI 主动转人工" value={stats.escalations} prefix={<RobotOutlined />} />
+      <Statistic title="高风险优先" value={stats.high} prefix={<ExclamationCircleOutlined />} />
+    </section>
+    <div className="queue-toolbar"><div><Typography.Title level={3}>待复核队列</Typography.Title><Typography.Text type="secondary">申诉优先，其次按进入队列时间排序</Typography.Text></div><Segmented value={filter} onChange={(value) => setFilter(String(value))} options={["全部任务", "用户申诉", "AI 转人工"]} /></div>
+    {tasks.length === 0 ? <Empty image={<InboxOutlined className="large-empty-icon" />} description="当前筛选下没有待处理任务" /> : <div className="review-task-grid">
+      {tasks.map((task) => {
+        const found = findFloor(task.contentId);
+        if (!found) return null;
+        const { floor, topic } = found;
+        const appeal = findAppeal(floor.id);
+        return <Card key={task.id} className={`review-task-card priority-${task.priority}`} hoverable onClick={() => navigate(`/reviewer/${task.id}`)}>
+          <div className="task-card-head"><Space><Tag color={task.source === "user_appeal" ? "blue" : "gold"}>{task.source === "user_appeal" ? "用户申诉" : "AI 主动转人工"}</Tag>{task.priority === "high" && <Tag color="red">优先处理</Tag>}</Space><Typography.Text type="secondary">等待 {dayjs().diff(dayjs(task.createdAt), "minute")} 分钟</Typography.Text></div>
+          <Typography.Text type="secondary">{topic.title}</Typography.Text>
+          <Typography.Paragraph className="task-quote" ellipsis={{ rows: 2 }}>“{floor.text}”</Typography.Paragraph>
+          <div className="task-author-row"><span>发布者：<strong>{userName(floor.authorId)}</strong></span><span>{dayjs(floor.createdAt).format("MM-DD HH:mm")}</span></div>
+          <div className="risk-line"><RiskLevelTag level={floor.moderation.riskLevel} /><Progress percent={floor.moderation.riskScore} showInfo={false} strokeColor={floor.moderation.riskLevel >= 3 ? "#c2413b" : "#c98322"} /></div>
+          <Space wrap>{floor.moderation.riskTypes.map((type) => <RiskTag key={type} type={type} />)}{floor.moderation.contextTags.map((type) => <RiskTag key={type} type={type} />)}</Space>
+          {appeal && <div className="appeal-preview"><span>申诉重点</span><p>{appeal.reason}</p></div>}
+          <div className="task-card-footer"><span>{floor.moderation.evidence.length} 条证据 · {floor.moderation.contextUsed.length} 类上下文</span><Button type="primary" ghost icon={<ArrowRightOutlined />}>进入复核</Button></div>
+        </Card>;
+      })}
+    </div>}
+  </div>;
 }

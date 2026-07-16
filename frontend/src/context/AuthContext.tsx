@@ -1,47 +1,34 @@
-import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from "react";
-import { getDemoUsers } from "../api";
+import { createContext, type ReactNode, useContext, useMemo, useState } from "react";
 import type { DemoUser } from "../types";
 
 interface AuthContextValue {
-  user: DemoUser | null;
+  user: DemoUser;
   users: DemoUser[];
   loading: boolean;
   selectUser: (userId: string) => void;
 }
 
+const demoUsers: DemoUser[] = [
+  { id: "student_a", username: "zhangsan", displayName: "张三", role: "user" },
+  { id: "student_b", username: "lisi", displayName: "李四", role: "user" },
+  { id: "student_c", username: "wangwu", displayName: "王五", role: "user" },
+  { id: "reviewer_1", username: "reviewer", displayName: "审核员", role: "reviewer" },
+];
+
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [users, setUsers] = useState<DemoUser[]>([]);
-  const [user, setUser] = useState<DemoUser | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    getDemoUsers()
-      .then((items) => {
-        setUsers(items);
-        const selectedId = localStorage.getItem("contextguard.userId") ?? "student_a";
-        const selected = items.find((item) => item.id === selectedId) ?? items[0] ?? null;
-        setUser(selected);
-        if (selected) localStorage.setItem("contextguard.userId", selected.id);
-      })
-      .finally(() => setLoading(false));
-  }, []);
-
-  const value = useMemo<AuthContextValue>(
-    () => ({
-      user,
-      users,
-      loading,
-      selectUser: (userId) => {
-        const selected = users.find((item) => item.id === userId) ?? null;
-        setUser(selected);
-        if (selected) localStorage.setItem("contextguard.userId", selected.id);
-      },
-    }),
-    [loading, user, users],
-  );
-
+  const [userId, setUserId] = useState(() => localStorage.getItem("contextguard.userId") ?? "student_a");
+  const user = demoUsers.find((item) => item.id === userId) ?? demoUsers[0];
+  const value = useMemo<AuthContextValue>(() => ({
+    user,
+    users: demoUsers,
+    loading: false,
+    selectUser: (nextUserId) => {
+      localStorage.setItem("contextguard.userId", nextUserId);
+      setUserId(nextUserId);
+    },
+  }), [user]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
@@ -50,4 +37,3 @@ export function useAuth() {
   if (!value) throw new Error("useAuth must be used inside AuthProvider");
   return value;
 }
-

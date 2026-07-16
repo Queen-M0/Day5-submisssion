@@ -1,238 +1,125 @@
 import {
   ArrowRightOutlined,
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  CommentOutlined,
   EyeOutlined,
-  MessageOutlined,
-  ReloadOutlined,
-  SendOutlined,
+  FileProtectOutlined,
+  PlusOutlined,
+  SafetyCertificateOutlined,
+  SearchOutlined,
+  TeamOutlined,
 } from "@ant-design/icons";
-import {
-  Alert,
-  App,
-  Button,
-  Empty,
-  Form,
-  Input,
-  List,
-  Modal,
-  Select,
-  Space,
-  Spin,
-  Typography,
-} from "antd";
+import { App, Button, Card, Col, Form, Input, Modal, Row, Select, Space, Statistic, Tag, Typography } from "antd";
 import dayjs from "dayjs";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { createContent, getContents, getScenes, submitAppeal } from "../api";
-import { RiskTag } from "../components/RiskTag";
-import { StatusTag } from "../components/StatusTag";
+import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import type { ContentItem, Scene } from "../types";
+import { useDemo } from "../context/DemoContext";
 
-const demoCases = [
-  { label: "正常交流", value: "这次小组作业我们今晚八点开会讨论吧。" },
-  { label: "明确辱骂", value: "你就是废物，别来拖累我们。" },
-  { label: "安全引用", value: "楼上说“你就是废物”这种话不合适，请管理员处理。" },
-  { label: "隐晦攻击", value: "别让那个“大聪明”碰展示，懂的都懂。" },
-  { label: "明确威胁", value: "你放学等着，我会让你后悔。" },
-];
+const categories = ["全部话题", "训练营协作", "校园活动", "失物招领"];
 
 export function CommunityPage() {
   const { message } = App.useApp();
-  const { user } = useAuth();
-  const [scenes, setScenes] = useState<Scene[]>([]);
-  const [contents, setContents] = useState<ContentItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [text, setText] = useState("");
-  const [parentId, setParentId] = useState<string | null>(null);
-  const [selected, setSelected] = useState<ContentItem | null>(null);
-  const [appealTarget, setAppealTarget] = useState<ContentItem | null>(null);
-  const [appealForm] = Form.useForm();
-  const scene = scenes[0];
+  const navigate = useNavigate();
+  const { user, users } = useAuth();
+  const { topics, reviewTasks, createTopic } = useDemo();
+  const [query, setQuery] = useState("");
+  const [category, setCategory] = useState("全部话题");
+  const [open, setOpen] = useState(false);
+  const [form] = Form.useForm();
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const loadedScenes = await getScenes();
-      setScenes(loadedScenes);
-      if (loadedScenes[0]) setContents(await getContents(loadedScenes[0].id));
-    } catch {
-      message.error("无法加载社区数据，请确认后端已启动并完成 seed");
-    } finally {
-      setLoading(false);
-    }
-  }, [message]);
+  const publicTopics = useMemo(() => topics.filter((topic) => topic.floors.some((floor) => floor.floorNumber === 1 && floor.visibleToPublic)), [topics]);
+  const filtered = publicTopics.filter((topic) => (category === "全部话题" || topic.category === category) && `${topic.title}${topic.summary}`.includes(query.trim()));
+  const publicFloors = publicTopics.flatMap((topic) => topic.floors).filter((floor) => floor.visibleToPublic).length;
+  const pending = reviewTasks.filter((task) => task.status === "pending").length;
+  const userName = (id: string) => users.find((item) => item.id === id)?.displayName ?? "社区用户";
 
-  useEffect(() => { void load(); }, [load, user?.id]);
-
-  const replyOptions = useMemo(
-    () => contents.filter((item) => item.visibleToPublic).map((item, index) => ({
-      value: item.id,
-      label: `${index + 1} 楼 · ${item.author.displayName}：${item.text.slice(0, 24)}`,
-    })),
-    [contents],
-  );
-
-  const send = async () => {
-    if (!text.trim() || !scene) return;
-    setSubmitting(true);
-    try {
-      const result = await createContent({ sceneId: scene.id, contentType: "forum_reply", parentId, text });
-      setText("");
-      setParentId(null);
-      message[result.decision === "publish" ? "success" : "warning"](result.userVisibleReason);
-      await load();
-    } catch {
-      message.error("发布失败，请稍后重试");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const appeal = async (values: { appealType: string; reason: string }) => {
-    if (!appealTarget) return;
-    await submitAppeal(appealTarget.id, values);
-    message.success("申诉已提交，审核员会结合上下文进行人工复核");
-    setAppealTarget(null);
-    appealForm.resetFields();
-    await load();
+  const submitTopic = (values: { title: string; body: string; category: string }) => {
+    const topicId = createTopic({ ...values, authorId: user.id });
+    setOpen(false);
+    form.resetFields();
+    message.success("AI 审核通过，话题已公开并分配 1 楼");
+    navigate(`/topics/${topicId}`);
   };
 
   return (
-    <div className="page community-page">
-      <section className="page-heading">
-        <div>
-          <Typography.Title level={2}>{scene?.title ?? "校园交流社区"}</Typography.Title>
-          <Typography.Paragraph type="secondary">{scene?.description}</Typography.Paragraph>
-        </div>
-        <Button icon={<ReloadOutlined />} onClick={() => void load()}>刷新</Button>
-      </section>
-
-      <section className="composer-panel">
-        <div className="composer-topline">
-          <Typography.Text strong>发布新楼层</Typography.Text>
-          <Select
-            placeholder="载入演示样例"
-            options={demoCases}
-            onChange={setText}
-            value={undefined}
-            className="demo-case-select"
-          />
-        </div>
-        <Input.TextArea
-          value={text}
-          onChange={(event) => setText(event.target.value)}
-          placeholder="输入你想参与讨论的内容"
-          autoSize={{ minRows: 3, maxRows: 7 }}
-          maxLength={2000}
-          showCount
-        />
-        <div className="composer-actions">
-          <Select
-            allowClear
-            showSearch
-            placeholder="引用某一楼（可选）"
-            value={parentId}
-            onChange={(value) => setParentId(value ?? null)}
-            options={replyOptions}
-            className="reply-select"
-          />
-          <Button type="primary" icon={<SendOutlined />} loading={submitting} disabled={!text.trim()} onClick={() => void send()}>
-            提交审核
-          </Button>
-        </div>
-      </section>
-
-      <Alert
-        type="info"
-        showIcon
-        message="当前使用确定性的 Mock AI Provider，适合稳定演示；真实模型将在后续 Agent 分支接入。"
-        className="demo-alert"
-      />
-
-      <section className="discussion-section">
-        <div className="section-title-row">
-          <Typography.Title level={4}>讨论楼层</Typography.Title>
-          <Typography.Text type="secondary">共 {contents.length} 条</Typography.Text>
-        </div>
-        <Spin spinning={loading}>
-          {contents.length === 0 ? <Empty description="还没有讨论内容" /> : (
-            <List
-              dataSource={contents}
-              renderItem={(item, index) => {
-                const own = item.author.id === user?.id;
-                return (
-                  <List.Item className={`message-card ${!item.visibleToPublic ? "message-card-limited" : ""}`}>
-                    <div className="floor-index">{index + 1}F</div>
-                    <div className="message-body">
-                      <div className="message-meta">
-                        <Space wrap>
-                          <Typography.Text strong>{item.author.displayName}</Typography.Text>
-                          <Typography.Text type="secondary">@{item.author.username}</Typography.Text>
-                          {item.parentAuthorName && <Typography.Text type="secondary">回复 {item.parentAuthorName}</Typography.Text>}
-                        </Space>
-                        <Typography.Text type="secondary">{dayjs(item.createdAt).format("MM-DD HH:mm")}</Typography.Text>
-                      </div>
-                      <Typography.Paragraph className="message-text">{item.text}</Typography.Paragraph>
-                      <div className="message-footer">
-                        <Space wrap>
-                          <StatusTag status={item.status} />
-                          {item.moderation?.riskTypes.map((type) => <RiskTag key={type} type={type} />)}
-                        </Space>
-                        <Space>
-                          {own && item.moderation && (
-                            <Button type="text" size="small" icon={<EyeOutlined />} onClick={() => setSelected(item)}>查看结果</Button>
-                          )}
-                          {own && ["limited", "pending_manual_review"].includes(item.status) && (
-                            <Button size="small" type="link" icon={<MessageOutlined />} onClick={() => setAppealTarget(item)}>申诉</Button>
-                          )}
-                        </Space>
-                      </div>
-                    </div>
-                  </List.Item>
-                );
-              }}
-            />
-          )}
-        </Spin>
-      </section>
-
-      <Modal title="审核结果" open={Boolean(selected)} onCancel={() => setSelected(null)} footer={null}>
-        {selected?.moderation && (
-          <Space direction="vertical" size={16} className="modal-stack">
-            <div><StatusTag status={selected.status} /></div>
-            <Typography.Paragraph>{selected.moderation.userVisibleReason}</Typography.Paragraph>
-            <div>
-              <Typography.Text type="secondary">风险类型</Typography.Text>
-              <div className="tag-row">
-                {selected.moderation.riskTypes.length
-                  ? selected.moderation.riskTypes.map((type) => <RiskTag key={type} type={type} />)
-                  : <Typography.Text>未发现明确风险</Typography.Text>}
-              </div>
-            </div>
-            {["limited", "pending_manual_review"].includes(selected.status) && (
-              <Button type="primary" onClick={() => { setAppealTarget(selected); setSelected(null); }}>
-                提交申诉 <ArrowRightOutlined />
-              </Button>
-            )}
+    <div className="page community-home-page">
+      <section className="community-hero">
+        <div className="hero-copy">
+          <Space className="eyebrow"><SafetyCertificateOutlined /><span>固定社区 · 发布前上下文审核</span></Space>
+          <Typography.Title level={1}>AI Native 青年讨论社区</Typography.Title>
+          <Typography.Paragraph>在同一个社区中围绕多个话题交流。每一楼公开前都会分析说话者、对象、意图与上下文；有争议时由审核员接管。</Typography.Paragraph>
+          <Space wrap>
+            <Button type="primary" size="large" icon={<PlusOutlined />} onClick={() => setOpen(true)}>发起新话题</Button>
+            <Button size="large" onClick={() => navigate("/my-posts")}>查看我的发布</Button>
           </Space>
-        )}
-      </Modal>
+        </div>
+        <div className="hero-proof-card">
+          <div className="proof-label">本原型要证明</div>
+          <div className="proof-item"><CheckCircleOutlined /><span>安全引用不会被敏感词误杀</span></div>
+          <div className="proof-item"><CheckCircleOutlined /><span>隐晦骚扰会结合连续对话识别</span></div>
+          <div className="proof-item"><CheckCircleOutlined /><span>AI 错误可申诉、可人工改判</span></div>
+          <div className="proof-foot">AI 给建议，系统做分流，人工做终审</div>
+        </div>
+      </section>
 
-      <Modal title="提交申诉" open={Boolean(appealTarget)} onCancel={() => setAppealTarget(null)} footer={null} destroyOnClose>
-        <Typography.Paragraph type="secondary">审核员将查看原始内容、上下文和你的补充说明，申诉不会交给同一个 AI 自动裁决。</Typography.Paragraph>
-        <Form form={appealForm} layout="vertical" onFinish={(values) => void appeal(values)}>
-          <Form.Item label="申诉类型" name="appealType" initialValue="quote_or_report" rules={[{ required: true }]}>
-            <Select options={[
-              { value: "quote_or_report", label: "我是在引用、反驳或举报" },
-              { value: "joke_or_misunderstanding", label: "这是玩笑或误会" },
-              { value: "missing_context", label: "内容被断章取义" },
-              { value: "other", label: "其他" },
-            ]} />
-          </Form.Item>
-          <Form.Item label="补充说明" name="reason" rules={[{ required: true, min: 5, message: "请至少填写 5 个字" }]}>
-            <Input.TextArea rows={4} maxLength={1000} showCount placeholder="说明引用关系、真实语境或缺失的上下文" />
-          </Form.Item>
-          <Button type="primary" htmlType="submit" block>提交给审核员</Button>
+      <section className="community-stats">
+        <Statistic title="公开话题" value={publicTopics.length} prefix={<CommentOutlined />} />
+        <Statistic title="公开楼层" value={publicFloors} prefix={<FileProtectOutlined />} />
+        <Statistic title="社区成员" value={3} prefix={<TeamOutlined />} />
+        <Statistic title="待人工复核" value={pending} prefix={<ClockCircleOutlined />} />
+      </section>
+
+      <div className="community-layout">
+        <main>
+          <div className="section-heading">
+            <div><Typography.Title level={3}>社区话题</Typography.Title><Typography.Text type="secondary">线性楼层展示，回复指定楼层但不产生嵌套评论</Typography.Text></div>
+            <Input allowClear prefix={<SearchOutlined />} placeholder="搜索话题" value={query} onChange={(event) => setQuery(event.target.value)} className="topic-search" />
+          </div>
+          <div className="category-tabs">
+            {categories.map((item) => <Button key={item} type={category === item ? "primary" : "text"} onClick={() => setCategory(item)}>{item}</Button>)}
+          </div>
+          <div className="topic-list">
+            {filtered.map((topic) => {
+              const floors = topic.floors.filter((floor) => floor.visibleToPublic);
+              const last = floors[floors.length - 1];
+              return (
+                <Card key={topic.id} className="topic-card" hoverable onClick={() => navigate(`/topics/${topic.id}`)}>
+                  <div className="topic-card-top"><Tag color="geekblue">{topic.category}</Tag><Typography.Text type="secondary">更新于 {dayjs(topic.lastActiveAt).format("MM-DD HH:mm")}</Typography.Text></div>
+                  <Typography.Title level={4}>{topic.title}</Typography.Title>
+                  <Typography.Paragraph type="secondary" ellipsis={{ rows: 2 }}>{topic.summary}</Typography.Paragraph>
+                  <div className="topic-card-bottom">
+                    <Space split={<span className="meta-divider" />}>
+                      <span>{userName(topic.authorId)} 发起</span><span>{floors.length} 楼</span><span><EyeOutlined /> {topic.viewCount}</span>
+                    </Space>
+                    <Space><Typography.Text type="secondary">最新：{last ? userName(last.authorId) : "—"}</Typography.Text><ArrowRightOutlined /></Space>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        </main>
+        <aside className="community-aside">
+          <Card className="aside-card" title="发布审核闭环">
+            <div className="flow-step"><span>01</span><div><strong>提交内容</strong><small>暂不公开，不提前占楼</small></div></div>
+            <div className="flow-step"><span>02</span><div><strong>AI 分析上下文</strong><small>说话者 · 对象 · 意图 · 引用</small></div></div>
+            <div className="flow-step"><span>03</span><div><strong>系统分流</strong><small>允许 · 限制 · 人工复核</small></div></div>
+            <div className="flow-step"><span>04</span><div><strong>申诉与改判</strong><small>补充上下文，审核员最终裁决</small></div></div>
+          </Card>
+          <Card className="aside-card demo-guide" title="推荐演示路径">
+            <ol><li>进入“团队赛展示”话题</li><li>加载隐晦骚扰样例并提交</li><li>切换张三查看申诉</li><li>切换审核员完成改判</li></ol>
+          </Card>
+        </aside>
+      </div>
+
+      <Modal title="发起新话题" open={open} onCancel={() => setOpen(false)} footer={null} width={620} destroyOnClose>
+        <div className="modal-intro"><SafetyCertificateOutlined /><span>1 楼审核通过后，话题才会出现在公开社区。</span></div>
+        <Form form={form} layout="vertical" onFinish={submitTopic} initialValues={{ category: "训练营协作" }}>
+          <Form.Item label="话题标题" name="title" rules={[{ required: true, min: 4, message: "请填写至少 4 个字" }]}><Input maxLength={60} showCount placeholder="用一句话说明要讨论什么" /></Form.Item>
+          <Form.Item label="话题分类" name="category" rules={[{ required: true }]}><Select options={categories.slice(1).map((item) => ({ label: item, value: item }))} /></Form.Item>
+          <Form.Item label="1 楼正文" name="body" rules={[{ required: true, min: 5 }]}><Input.TextArea rows={6} maxLength={2000} showCount placeholder="输入话题正文，提交后将进行上下文审核" /></Form.Item>
+          <Button type="primary" htmlType="submit" block>提交 AI 审核并发布</Button>
         </Form>
       </Modal>
     </div>

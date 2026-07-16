@@ -1,62 +1,32 @@
-import { FileSearchOutlined, ReloadOutlined } from "@ant-design/icons";
-import { App, Button, Empty, List, Space, Spin, Typography } from "antd";
+import { CheckCircleOutlined, ClockCircleOutlined, FileSearchOutlined, SafetyCertificateOutlined } from "@ant-design/icons";
+import { Card, Empty, Space, Steps, Tag, Typography } from "antd";
 import dayjs from "dayjs";
-import { useCallback, useEffect, useState } from "react";
-import { getMyAppeals } from "../api";
+import { useAuth } from "../context/AuthContext";
+import { useDemo } from "../context/DemoContext";
 import { StatusTag } from "../components/StatusTag";
-import type { Appeal } from "../types";
 
 export function AppealsPage() {
-  const { message } = App.useApp();
-  const [items, setItems] = useState<Appeal[]>([]);
-  const [loading, setLoading] = useState(true);
-  const load = useCallback(async () => {
-    setLoading(true);
-    try { setItems(await getMyAppeals()); }
-    catch { message.error("申诉记录加载失败"); }
-    finally { setLoading(false); }
-  }, [message]);
+  const { user } = useAuth();
+  const { appeals, findFloor } = useDemo();
+  const mine = appeals.filter((item) => item.authorId === user.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const statusAlias: Record<string, string> = { submitted: "appeal_submitted", reviewing: "appeal_reviewing", approved: "appeal_approved", rejected: "appeal_rejected", need_more_context: "need_more_context" };
 
-  useEffect(() => { void load(); }, [load]);
-  const statusAlias: Record<string, string> = {
-    submitted: "appeal_submitted",
-    reviewing: "pending_manual_review",
-    approved: "appeal_approved",
-    rejected: "appeal_rejected",
-  };
-
-  return (
-    <div className="page narrow-page">
-      <section className="page-heading">
-        <div>
-          <Typography.Title level={2}>我的申诉</Typography.Title>
-          <Typography.Paragraph type="secondary">查看人工复核进度与最终处理结果。</Typography.Paragraph>
-        </div>
-        <Button icon={<ReloadOutlined />} onClick={() => void load()}>刷新</Button>
-      </section>
-      <Spin spinning={loading}>
-        {items.length === 0 ? (
-          <Empty image={<FileSearchOutlined className="large-empty-icon" />} description="暂无申诉记录" />
-        ) : (
-          <List
-            dataSource={items}
-            renderItem={(item) => (
-              <List.Item className="appeal-card">
-                <div className="appeal-card-header">
-                  <Space wrap><StatusTag status={statusAlias[item.status] ?? item.status} /><Typography.Text code>{item.id.slice(0, 8)}</Typography.Text></Space>
-                  <Typography.Text type="secondary">{dayjs(item.createdAt).format("YYYY-MM-DD HH:mm")}</Typography.Text>
-                </div>
-                <Typography.Paragraph strong ellipsis={{ rows: 2 }}>{item.contentText}</Typography.Paragraph>
-                <div className="appeal-reason">
-                  <Typography.Text type="secondary">申诉说明</Typography.Text>
-                  <Typography.Paragraph>{item.reason}</Typography.Paragraph>
-                </div>
-              </List.Item>
-            )}
-          />
-        )}
-      </Spin>
-    </div>
-  );
+  return <div className="page appeals-page">
+    <section className="page-heading"><div><Typography.Title level={2}>我的申诉</Typography.Title><Typography.Paragraph type="secondary">查看补充上下文是否进入复核，以及审核员的最终处理结果。</Typography.Paragraph></div><div className="human-review-badge"><SafetyCertificateOutlined /> 人工最终裁决</div></section>
+    {mine.length === 0 ? <Empty image={<FileSearchOutlined className="large-empty-icon" />} description="暂无申诉记录，请在“我的发布”中对受限内容发起申诉" /> : <div className="appeal-list">
+      {mine.map((appeal) => {
+        const found = findFloor(appeal.contentId);
+        const final = ["approved", "rejected"].includes(appeal.status);
+        const current = appeal.status === "submitted" ? 2 : appeal.status === "reviewing" ? 3 : final ? 4 : 3;
+        return <Card key={appeal.id} className="appeal-detail-card">
+          <div className="appeal-card-header"><Space><StatusTag status={statusAlias[appeal.status]} /><Tag color="blue">{appeal.appealType}</Tag></Space><Typography.Text type="secondary">{dayjs(appeal.createdAt).format("YYYY-MM-DD HH:mm")}</Typography.Text></div>
+          <Typography.Text type="secondary">所属话题</Typography.Text><Typography.Title level={4}>{found?.topic.title}</Typography.Title>
+          <div className="appealed-content">“{found?.floor.text}”</div>
+          <div className="appeal-two-column"><div><span>申诉理由</span><p>{appeal.reason}</p></div><div><span>补充上下文</span><p>{appeal.extraContext}</p></div></div>
+          <Steps current={current} size="small" items={[{ title: "原始限制" }, { title: "提交申诉" }, { title: "AI 反证" }, { title: "人工复核" }, { title: "最终结果" }]} />
+          {appeal.finalReason ? <div className={`final-decision final-${appeal.status}`}><CheckCircleOutlined /><div><strong>审核员最终理由</strong><p>{appeal.finalReason}</p></div></div> : <div className="waiting-review"><ClockCircleOutlined /><span>AI 只提供正反依据，当前等待审核员最终裁决。</span></div>}
+        </Card>;
+      })}
+    </div>}
+  </div>;
 }
-
