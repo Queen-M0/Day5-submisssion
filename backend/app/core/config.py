@@ -19,6 +19,14 @@ class Settings(BaseSettings):
     ai_temperature: float = 0.0
     ai_max_tokens: int = 900
 
+    # Appeal re-review ("counter-argument") agent. Reuses the same API key,
+    # base URL, model, timeout, temperature and max_tokens as the moderation
+    # provider; only the prompt/rule identity and an optional dedicated model
+    # differ so the two agents stay independently versioned.
+    ai_appeal_model: str = ""
+    ai_appeal_prompt_version: str = "appeal-critic-v1"
+    ai_appeal_rule_version: str = "appeal-community-v1"
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     @property

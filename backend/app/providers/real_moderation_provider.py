@@ -1,9 +1,7 @@
-import json
 from typing import Any, Dict, List
 
-import httpx
-
 from app.providers.ai_provider import ModerationInput, ModerationProvider
+from app.providers.openai_compat import call_openai_json
 from app.schemas.common import ModerationResult
 
 
@@ -71,36 +69,17 @@ class RealModerationProvider(ModerationProvider):
         self.max_tokens = max_tokens
 
     def moderate(self, payload: ModerationInput) -> ModerationResult:
-        messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": self._build_user_prompt(payload)},
-        ]
-        body = {
-            "model": self.model,
-            "messages": messages,
-            "response_format": {"type": "json_object"},
-            "temperature": self.temperature,
-            "max_tokens": self.max_tokens,
-        }
-        with httpx.Client(timeout=self.timeout) as client:
-            resp = client.post(
-                f"{self.base_url}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {self.api_key}",
-                    "Content-Type": "application/json",
-                },
-                json=body,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-
-        try:
-            content = data["choices"][0]["message"]["content"]
-        except (KeyError, IndexError, TypeError) as exc:
-            raise ValueError(f"unexpected chat completion shape: {exc}") from exc
-
-        parsed = self._parse_json(content)
-        parsed = self._coerce(parsed)
+        raw = call_openai_json(
+            base_url=self.base_url,
+            api_key=self.api_key,
+            model=self.model,
+            system_prompt=SYSTEM_PROMPT,
+            user_prompt=self._build_user_prompt(payload),
+            timeout=self.timeout,
+            temperature=self.temperature,
+            max_tokens=self.max_tokens,
+        )
+        parsed = self._coerce(raw)
         return ModerationResult.model_validate(parsed)
 
     @staticmethod
@@ -125,22 +104,6 @@ class RealModerationProvider(ModerationProvider):
         lines.append("")
         lines.append("请对上面【当前待审核内容】做判断，并只输出规定的 JSON 对象。")
         return "\n".join(lines)
-
-    @staticmethod
-    def _parse_json(content: str) -> Dict[str, Any]:
-        text = content.strip()
-        if text.startswith("```"):
-            text = text.strip("`")
-            if text[:4].lower() == "json":
-                text = text[4:]
-            text = text.strip()
-        try:
-            return json.loads(text)
-        except json.JSONDecodeError:
-            start, end = text.find("{"), text.rfind("}")
-            if start != -1 and end != -1 and end > start:
-                return json.loads(text[start : end + 1])
-            raise
 
     @staticmethod
     def _coerce(parsed: Dict[str, Any]) -> Dict[str, Any]:

@@ -80,7 +80,13 @@ def test_high_risk_content_can_be_appealed_and_restored(client):
         f"/api/reviewer/tasks/appeal__{appeal_id}", headers={"X-User-Id": "reviewer_1"}
     )
     assert task.status_code == 200
-    assert task.json()["counterAnalysis"] is None
+    counter = task.json()["counterAnalysis"]
+    assert counter is not None
+    assert "supportsOriginalDecision" in counter
+    assert "supportsChange" in counter
+    assert "newEvidenceImpact" in counter
+    assert "reviewSuggestion" in counter
+    assert counter["provider"] == "mock-appeal-critic"
     assert task.json()["appeal"]["extraContext"].startswith("这是对舞台剧")
 
     decision = client.post(

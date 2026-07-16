@@ -46,6 +46,32 @@ class ModerationResult(APIModel):
     suggested_revision: str = ""
 
 
+class AppealCriticResult(APIModel):
+    """Output of the appeal re-review ("counter-argument") agent.
+
+    The agent does NOT make the final decision; it actively challenges the
+    first review and gives a human reviewer two-sided arguments plus a
+    non-binding recommendation. Field names are camelCased to match the
+    frontend CounterAnalysis contract (supportsOriginalDecision /
+    supportsChange / newEvidenceImpact / remainingUncertainties /
+    reviewSuggestion).
+    """
+
+    upholds_initial: bool
+    recommended_decision: str
+    confidence: float = Field(ge=0, le=1)
+    risk_level: int = Field(ge=0, le=3)
+    risk_score: int = Field(ge=0, le=100)
+    risk_types: List[str] = Field(default_factory=list)
+    supports_original_decision: List[str] = Field(default_factory=list)
+    supports_change: List[str] = Field(default_factory=list)
+    new_evidence_impact: str
+    remaining_uncertainties: List[str] = Field(default_factory=list)
+    evidence: List[EvidenceItem] = Field(default_factory=list)
+    review_suggestion: str
+    reasoning: str
+
+
 class ContentItem(APIModel):
     id: str
     scene_id: str

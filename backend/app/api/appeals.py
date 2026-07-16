@@ -1,9 +1,11 @@
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
+from app.api.dependencies import appeal_service
 from app.core.database import get_db
 from app.models import Appeal, AuditLog, Content, ManualReview, Topic
 from app.schemas.requests import SubmitAppealRequest
@@ -57,12 +59,28 @@ def submit_appeal(
             detail={"appealId": appeal.id, "appealType": payload.appeal_type},
         )
     )
+
+    # Run the appeal re-review ("counter-argument") agent. It consumes the
+    # persisted initial moderation record and writes counter_analysis. On
+    # failure it returns None and the appeal stays in the manual queue.
+    counter = appeal_service.analyze(db, appeal, content)
+    if counter:
+        appeal.counter_analysis = counter
+        appeal.analyzed_at = datetime.now(timezone.utc)
+        appeal.status = "reviewing"
+
     db.commit()
     return {
         "appealId": appeal.id,
         "status": appeal.status,
         "contentStatus": content.status,
-        "message": "申诉已提交，等待人工复核。",
+        "aiAnalyzed": counter is not None,
+        "counterAnalysis": appeal.counter_analysis or None,
+        "message": (
+            "申诉已提交，反证 Agent 已完成复核分析，等待审核员最终裁决。"
+            if counter
+            else "申诉已提交，反证 Agent 暂未接入，等待人工复核。"
+        ),
     }
 
 
