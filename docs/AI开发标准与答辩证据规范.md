@@ -17,7 +17,7 @@
 - AI 在系统里做了什么，哪些地方必须保留人工判断？
 - 最小原型证明了哪个核心判断？
 - 哪些边界、误判和失败样例被验证过？
-- 三名成员各自负责了哪些关键判断、代码和证据？
+- 两名成员各自负责了哪些关键判断、代码和证据？
 - Day7 被追问时，能否拿出文件、日志、测试和截图证明？
 
 因此，本标准把开发拆成 7 个考点和 6 类交付证据。最终目标不是“把系统做大”，而是“把核心判断做实”。
@@ -56,7 +56,7 @@
 
 - 做一个敏感词列表。
 - 做一个聊天页面。
-- 做一个管理员后台。
+- 做一个完整运营后台。
 - 做一个大而全的社区平台。
 
 本题的真实问题是：
@@ -107,7 +107,7 @@
 
 | 问题 | 为什么关键 | 本项目假设 |
 | --- | --- | --- |
-| 内容形态是论坛还是群聊？ | 决定上下文窗口和回复关系 | 采用班级群聊 + 论坛回复的混合形态 |
+| 内容形态是什么？ | 决定上下文窗口和回复关系 | 采用社区广场话题 + 线性楼层回复 |
 | 审核是在发布前还是发布后？ | 决定用户体验和状态机 | 发布前审核，高风险不公开，中风险人工复核 |
 | AI 输出能否直接决定处罚？ | 决定系统可信边界 | AI 只给建议，人工复核可改判 |
 | 申诉由谁处理？ | 决定闭环可信度 | 审核人员处理，不能只二次调用同一 AI |
@@ -275,7 +275,7 @@ AI 使用的核心标准：
 | 决策记录 | `docs/decision-log.md` | 关键判断可追溯 |
 | 失败记录 | `docs/failure-cases.md` | 不是只展示成功样例 |
 | 申诉复核 | `docs/manual-review-record.md` | 人工复核不是口头承诺 |
-| 贡献说明 | `docs/contribution-map.md` | 三名成员贡献能落到证据 |
+| 贡献说明 | `docs/contribution-map.md` | 两名成员贡献能落到证据 |
 | 答辩准备 | `docs/day7-defense.md` | 可以抗追问 |
 
 证据命名建议：
@@ -362,9 +362,8 @@ docs/PRD.md
 
 | 用户 | 核心诉求 | 典型场景 |
 | --- | --- | --- |
-| 普通用户 | 正常发言，不被误判；被限制后可申诉 | 班级群发消息、论坛回帖 |
+| 普通用户 | 正常发言，不被误判；被限制后可申诉 | 社区广场发言、话题楼层回帖 |
 | 审核人员 | 快速判断 AI 是否误判，保存复核结果 | 查看上下文、AI 理由、申诉理由后改判或维持 |
-| 管理员 | 配置策略、查看记录和统计 | 配置风险等级、导出审核记录 |
 
 ### 3.3 目标与非目标标准
 
@@ -562,18 +561,18 @@ AI 输出必须是结构化 JSON，至少包含：
 {
   "current": {
     "id": "msg_102",
-    "author": "student_b",
+    "author": "user_b",
     "text": "别让那个“大聪明”碰展示，懂的都懂。"
   },
   "parent": {
     "id": "msg_101",
-    "author": "student_a",
+    "author": "user_a",
     "text": "我可以负责这次展示。"
   },
   "recent_messages": [
     {
       "id": "msg_100",
-      "author": "student_b",
+      "author": "user_b",
       "text": "某些人又开始表现了。"
     }
   ],
@@ -668,7 +667,7 @@ docs/TDD.md
 | --- | --- | --- | --- |
 | TC-NORMAL-001 | 今天晚上八点讨论作业分工 | 无风险 | published |
 | TC-RISK-001 | 你就是废物，别拖累大家 | 明确对象 | limited |
-| TC-QUOTE-001 | 楼上说“你就是废物”这种话不合适，请管理员处理 | 举报语境 | published |
+| TC-QUOTE-001 | 楼上说“你就是废物”这种话不合适，请审核员处理 | 举报语境 | published |
 | TC-QUOTE-002 | 他说你是废物，我觉得没说错 | 赞同攻击 | limited |
 | TC-IMPLICIT-001 | 别让那个“大聪明”碰展示，懂的都懂 | 前文指向某同学 | manual_review |
 | TC-HARASS-001 | 某些人又开始装了 / 每次都是他拖后腿 / 不点名 | 连续同作者 | manual_review 或 limited |
@@ -851,15 +850,14 @@ docs/manual-review-record.md
 docs/contribution-map.md
 ```
 
-三人团队必须把贡献落到文件和判断上。
+双人团队必须把贡献落到文件和判断上，不增加第三名开发成员。A/B 两个人都要有明确主责，也要互相 Review，不能把测试或文档全部丢给某一个人。
 
 示例：
 
 | 成员 | 负责方向 | 关键判断 | 代码/文档证据 | 测试证据 | 答辩负责问题 |
 | --- | --- | --- | --- | --- | --- |
-| A | 问题定义 + PRD | 确认不是敏感词过滤，而是上下文审核 | `docs/01-problem-framing.md`, `docs/PRD.md` | TC-QUOTE / TC-IMPLICIT | 为什么这个题不是敏感词表 |
-| B | SDD + 审核引擎 | 设计规则 + AI + 人工复核链路 | `docs/SDD.md`, `backend/moderation` | TC-FAIL / TC-HARASS | AI 如何可信、如何兜底 |
-| C | TDD + 前端演示 | 构建失败样例和申诉闭环演示 | `docs/TDD.md`, `frontend/reviewer` | TC-APPEAL / REG | 如何证明系统有效 |
+| A | 问题定义 + 用户端 + 初审展示 | 确认不是敏感词过滤，而是社区广场上下文审核 | `docs/01-problem-framing.md`, `docs/PRD.md`, `frontend/user` | TC-QUOTE / TC-IMPLICIT | 为什么这个题不是敏感词表 |
+| B | 系统设计 + 审核引擎 + 复核证据 | 设计规则 + AI + 申诉 + 人工复核链路 | `docs/SDD.md`, `backend/moderation`, `docs/manual-review-record.md` | TC-FAIL / TC-HARASS / TC-APPEAL | AI 如何可信、如何兜底、如何证明系统有效 |
 
 要求：
 
@@ -941,7 +939,7 @@ day5-submission/
   },
   {
     "id": "case_quote_safe",
-    "text": "楼上说“你就是废物”这种话不合适，请管理员处理。",
+    "text": "楼上说“你就是废物”这种话不合适，请审核员处理。",
     "expected": "published"
   },
   {
@@ -1009,7 +1007,7 @@ day5-submission/
 | 人在哪里做判断？ | 方案取舍、Prompt 修改、复核改判 | `decision-log.md` |
 | 最小原型证明了什么？ | 发布、限制、申诉、复核闭环 | `minimum-proof.md` |
 | 有没有失败样例？ | 有误判、漏判、AI 失败和回归样例 | `failure-cases.md`, `TDD.md` |
-| 三个人分别贡献了什么？ | 每人对应模块、判断和证据 | `contribution-map.md` |
+| 两个人分别贡献了什么？ | 每人对应模块、判断和证据 | `contribution-map.md` |
 
 ### 10.2 答辩演示顺序
 
@@ -1271,25 +1269,24 @@ Day5 推荐角色：
 | --- | --- | --- | --- |
 | 普通用户 | 用户端 / Web 前端 | 发布内容、查看审核结果、提交申诉 | `contents` 记录、申诉记录、用户侧截图 |
 | 审核人员 | 审核端 / Web 前端 | 查看上下文、AI 理由、申诉理由，复核改判 | `manual_reviews` 记录、复核理由、审核端截图 |
-| 管理员 | 可选管理视图 | 查看策略和记录，导出审计 | 可 P1，不做则写入非目标 |
 | 系统服务 | 服务端 | 调用规则、AI、状态机、日志 | API 日志、AI 输出、状态流转记录 |
 
 注意：
 
 - 同一个 Web 前端可以同时承载普通用户和审核人员两个角色视图。
 - 角色可以合并，但职责不能消失。
-- 如果不做管理员端，必须在 PRD 非目标里说明。
+- 策略配置和审计导出可以作为 P1 后置能力，不作为第三个业务角色。
 - 不要因为题目说“说明系统边界”，就把所有外围功能都实现。说明边界不等于实现所有边界外功能。
 
 ### 15.3 团队职责约定
 
-三人团队可以分工灵活，但每个人的贡献必须可追溯。
+双人团队可以分工灵活，但本项目不增加第三名开发成员。每个人的贡献必须可追溯，并且两个人都要覆盖“判断、实现、验证、答辩”中的核心证据。
 
 | 职责方向 | 可以由谁负责 | 不能缺失的产物 |
 | --- | --- | --- |
-| 产品与问题判断 | 成员 A | `01-problem-framing.md`, `PRD.md`, 演示脚本 |
-| 系统设计与后端 | 成员 B | `SDD.md`, API、状态机、审核记录 |
-| 测试与复核证据 | 成员 C | `TDD.md`, `failure-cases.md`, `manual-review-record.md` |
+| 产品与用户端初审 | 成员 A | `01-problem-framing.md`, `PRD.md`, 用户端页面、初审演示脚本 |
+| 系统设计与复核闭环 | 成员 B | `SDD.md`, API、状态机、审核记录、`manual-review-record.md` |
+| 测试与证据归档 | 成员 A/B 共同负责 | `TDD.md`, `failure-cases.md`, `test-record.md`, `contribution-map.md` |
 
 个人贡献不能只靠口头说明。每个人至少要有：
 
@@ -1369,7 +1366,7 @@ docs/prototype-overview.md
 
 ```text
 普通用户端：
-1. 选择班级群或论坛帖子。
+1. 选择社区广场话题或楼层回复入口。
 2. 输入文本并发送。
 3. 查看审核状态。
 4. 若被限制，查看用户可见理由。
@@ -1431,29 +1428,29 @@ data/processed/moderation_cases.json
   "users": [
     {
       "id": "user_a",
-      "display_name": "李同学",
-      "role": "student"
+      "display_name": "广场用户A",
+      "role": "member"
     },
     {
       "id": "reviewer_1",
-      "display_name": "审核老师",
+      "display_name": "审核员",
       "role": "reviewer"
     }
   ],
   "scenes": [
     {
-      "id": "class_group_001",
-      "type": "chat_group",
-      "title": "高一三班作业群"
+      "id": "square_001",
+      "type": "community_square",
+      "title": "青年讨论广场"
     }
   ],
   "contents": [
     {
       "id": "msg_001",
-      "scene_id": "class_group_001",
+      "scene_id": "square_001",
       "author_id": "user_a",
       "parent_id": null,
-      "text": "我可以负责这次展示。",
+      "text": "我可以负责这次广场活动展示。",
       "created_at": "2026-07-16T09:00:00+08:00"
     }
   ]
@@ -1831,7 +1828,7 @@ docs/evidence-index.md
 ## 核心流程
 ## 测试命令
 ## 文档证据索引
-## 三人贡献摘要
+## 双人贡献摘要
 ```
 
 Mock 边界示例：
@@ -1902,7 +1899,7 @@ Mock 边界示例：
 | 边界类型 | 必须写清 | 对应文件 |
 | --- | --- | --- |
 | 题目边界 | 只处理文字，不处理图片、语音、视频；只做审核闭环，不做生产处罚系统 | `SPEC.md`, `PRD.md` |
-| 产品边界 | 至少服务端 + 一个前端；管理员配置可后置；不堆页面 | `prototype-overview.md`, `README.md` |
+| 产品边界 | 至少服务端 + 一个前端；策略配置可后置；不堆页面 | `prototype-overview.md`, `README.md` |
 | 数据边界 | 使用自定义演示数据；不代表真实平台全量风险分布 | `raw-data-design.md`, `TDD.md` |
 | AI 边界 | AI 给建议和证据，不直接做最终裁决 | `AI_WORKFLOW.md`, `SDD.md` |
 | 人工边界 | 审核人员处理申诉和低置信度，不负责替模型背书 | `manual-review-record.md` |
@@ -1944,7 +1941,7 @@ Mock 边界示例：
 
 | 顺序 | 节点 | 目标 | 必须沉淀文件 | 完成标准 |
 | --- | --- | --- | --- | --- |
-| 01 | 组队抽题 | 分工 | `contribution-map.md` 草案 | 三人角色和负责证据初步确定 |
+| 01 | 组队抽题 | 双人分工 | `contribution-map.md` 草案 | A/B 两人角色和负责证据初步确定 |
 | 02 | 诊断澄清 | P0 澄清问题 | `01-problem-framing.md`, `02-clarifying-questions.md` | 真问题、核心冲突、非目标写清 |
 | 03 | 方案反证 | 三条路线 + AI 反证 | `03-design-options.md`, `ai-collaboration-record.md` | 至少 1 条反证记录 |
 | 04 | 决策范围 | 非目标与 MVP | `decision-log.md`, `SPEC.md` | 不做什么写清，MVP 主线确定 |
