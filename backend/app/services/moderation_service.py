@@ -44,15 +44,25 @@ class ModerationService:
                 user_visible_reason="自动审核暂时无法完成，内容已进入人工复核。",
                 reviewer_reason=f"Provider 调用失败：{failure_reason}",
             )
-        evidence = [
-            {
-                "contentId": content.id,
-                "quote": item.text,
-                "reason": item.reason,
-                "verified": item.text in content.text,
-            }
-            for item in result.evidence
-        ]
+        source_texts = {content.id: content.text}
+        if context_built:
+            for message in context.messages:
+                source_texts[message.id] = message.text
+            if content.parent_id and context.parent_text is not None:
+                source_texts[content.parent_id] = context.parent_text
+        evidence = []
+        for item in result.evidence:
+            cited_id = item.content_id or content.id
+            cited_text = source_texts.get(cited_id)
+            verified = cited_text is not None and item.text in cited_text
+            evidence.append(
+                {
+                    "contentId": cited_id,
+                    "quote": item.text,
+                    "reason": item.reason,
+                    "verified": verified,
+                }
+            )
         evidence_valid = all(item["verified"] for item in evidence)
         supported_decision = result.decision in DECISION_STATUS
         if not supported_decision:
@@ -80,7 +90,7 @@ class ModerationService:
             id=str(uuid4()),
             content_id=content.id,
             provider=self.provider.name,
-            prompt_version="mock-v1",
+            prompt_version=getattr(self.provider, "prompt_version", "unknown"),
             risk_level=result.risk_level,
             risk_score=result.risk_score,
             risk_types=result.risk_types,
@@ -99,8 +109,8 @@ class ModerationService:
             user_visible_reason=result.user_visible_reason,
             reviewer_reason=result.reviewer_reason,
             raw_ai_response=result.model_dump(by_alias=True),
-            model_version="mock-rules-v1",
-            rule_version="community-v1",
+            model_version=getattr(self.provider, "model_version", "unknown"),
+            rule_version=getattr(self.provider, "rule_version", "unknown"),
             failure_reason=failure_reason,
         )
         db.add(record)

@@ -29,6 +29,9 @@ class ModerationInput:
 
 class ModerationProvider(ABC):
     name = "abstract"
+    prompt_version = "unknown"
+    model_version = "unknown"
+    rule_version = "unknown"
 
     @abstractmethod
     def moderate(self, payload: ModerationInput) -> ModerationResult:

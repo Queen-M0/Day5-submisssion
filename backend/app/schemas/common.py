@@ -24,6 +24,7 @@ class EvidenceItem(APIModel):
     text: str
     reason: str
     risk_type: str
+    content_id: Optional[str] = None
 
 
 class ModerationResult(APIModel):

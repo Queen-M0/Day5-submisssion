@@ -246,6 +246,102 @@ def test_appeal_and_review_permissions_are_enforced(client):
     assert blank_reason.status_code == 422
 
 
+def test_evidence_quote_from_other_floor_is_verified(client, monkeypatch):
+    from app.api.dependencies import moderation_service
+    from app.schemas.common import EvidenceItem, ModerationResult
+
+    def moderate(payload):
+        quoted = payload.messages[0] if payload.messages else None
+        return ModerationResult(
+            is_violation=True,
+            risk_level=3,
+            risk_score=88,
+            risk_types=["insult"],
+            confidence=0.9,
+            decision="limit",
+            evidence=[
+                EvidenceItem(
+                    text=quoted.text,
+                    reason="引用了其它楼层的原文作为证据",
+                    risk_type="insult",
+                    content_id=quoted.id,
+                )
+            ],
+            context_reasoning="证据来自上下文其它楼层。",
+            user_visible_reason="内容已限制。",
+            reviewer_reason="跨楼层证据校验。",
+        )
+
+    monkeypatch.setattr(moderation_service.provider, "moderate", moderate)
+    created = client.post(
+        "/api/topics/topic-ai-camp/contents",
+        headers={"X-User-Id": "student_a"},
+        json={"text": "这条内容引用楼上原话作为证据。", "replyToContentId": "floor-103"},
+    )
+    assert created.status_code == 201
+    content_id = created.json()["contentId"]
+
+    detail = client.get(
+        f"/api/contents/{content_id}/moderation", headers={"X-User-Id": "reviewer_1"}
+    ).json()
+    assert detail["evidenceValid"] is True
+    assert detail["evidence"][0]["verified"] is True
+    assert detail["evidence"][0]["contentId"] != content_id
+
+
+def test_fabricated_quote_fails_evidence_and_goes_manual(client, monkeypatch):
+    from app.api.dependencies import moderation_service
+    from app.schemas.common import EvidenceItem, ModerationResult
+
+    def moderate(payload):
+        return ModerationResult(
+            is_violation=True,
+            risk_level=3,
+            risk_score=95,
+            risk_types=["threat"],
+            confidence=0.9,
+            decision="limit",
+            evidence=[
+                EvidenceItem(
+                    text="这段原文在任何楼层都不存在",
+                    reason="编造的证据",
+                    risk_type="threat",
+                )
+            ],
+            context_reasoning="模型给出无法定位的证据。",
+            user_visible_reason="内容进入复核。",
+            reviewer_reason="证据无法定位。",
+        )
+
+    monkeypatch.setattr(moderation_service.provider, "moderate", moderate)
+    created = client.post(
+        "/api/topics/topic-campus-event/contents",
+        headers={"X-User-Id": "student_a"},
+        json={"text": "一条被模型编造证据的内容。"},
+    )
+    assert created.status_code == 201
+    body = created.json()
+    assert body["status"] == "pending_manual_review"
+    assert body["moderation"]["systemDecision"] == "manual_review"
+
+
+def test_moderation_record_uses_provider_versions(client, monkeypatch):
+    from app.api.dependencies import moderation_service
+
+    created = client.post(
+        "/api/topics/topic-campus-event/contents",
+        headers={"X-User-Id": "student_a"},
+        json={"text": "一条用于校验版本字段的普通内容。"},
+    )
+    assert created.status_code == 201
+    content_id = created.json()["contentId"]
+    detail = client.get(
+        f"/api/contents/{content_id}/moderation", headers={"X-User-Id": "reviewer_1"}
+    ).json()
+    assert detail["provider"] == moderation_service.provider.name
+    assert detail["modelVersion"] == moderation_service.provider.model_version
+
+
 def test_provider_failure_is_routed_to_manual_review(client, monkeypatch):
     from app.api.dependencies import moderation_service
 

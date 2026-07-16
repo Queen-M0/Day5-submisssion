@@ -9,6 +9,9 @@ class MockAIProvider(ModerationProvider):
     """Deterministic provider for demos and regression tests."""
 
     name = "mock-ai"
+    prompt_version = "mock-v1"
+    model_version = "mock-rules-v1"
+    rule_version = "community-v1"
 
     safe_markers = ("不合适", "请管理员", "举报", "不要说", "不能说", "引用", "反对")
     quote_markers = ("引用", "他说", "楼上说", "有人说", "举报", "不要说", "这种话")
