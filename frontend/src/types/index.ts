@@ -104,6 +104,26 @@ export interface DemoEvidence {
   verified: boolean;
 }
 
+export interface DualReviewModelResult {
+  provider: string;
+  modelVersion: string;
+  promptVersion?: string;
+  decision: string;
+  riskLevel: number;
+  riskTypes: string[];
+  evidenceValid?: boolean;
+}
+
+export interface DualReviewComparison {
+  enabled: boolean;
+  primary: DualReviewModelResult;
+  secondary: DualReviewModelResult;
+  divergent: boolean;
+  reasons: string[];
+  systemResolution: string;
+  failureReason: string | null;
+}
+
 export interface DemoModeration {
   riskLevel: 0 | 1 | 2 | 3;
   riskScore: number;
@@ -119,6 +139,7 @@ export interface DemoModeration {
   systemDecision: "publish" | "limit" | "manual_review";
   userVisibleReason: string;
   reviewerReason: string;
+  dualReview?: DualReviewComparison | null;
 }
 
 export interface AuditEvent {
@@ -162,6 +183,17 @@ export interface CounterAnalysis {
   newEvidenceImpact: string;
   remainingUncertainties: string[];
   reviewSuggestion: string;
+  reviewerSummary?: string;
+  evidenceValidation?: { valid: boolean; items: DemoEvidence[] };
+}
+
+export interface AppealAnalysisRun {
+  provider: string;
+  modelVersion: string;
+  promptVersion: string;
+  evidenceValid: boolean;
+  failureReason: string | null;
+  createdAt: string;
 }
 
 export interface DemoAppeal {
@@ -174,6 +206,8 @@ export interface DemoAppeal {
   status: "submitted" | "reviewing" | "approved" | "rejected" | "need_more_context";
   createdAt: string;
   counterAnalysis: CounterAnalysis | null;
+  analysisRun?: AppealAnalysisRun | null;
+  analysisCount?: number;
   finalReason?: string;
 }
 
@@ -188,6 +222,12 @@ export interface DemoReviewTask {
   resolvedAt?: string;
   finalDecision?: "allow" | "maintain_limit" | "need_more_context";
   reviewReason?: string;
+  dualReviewDivergent?: boolean;
+  originalSuggestedAction?: string;
+  originalSystemDecision?: string;
+  originalRiskLevel?: number;
+  finalRiskLevel?: number | null;
+  wasOverridden?: boolean;
 }
 
 export interface DemoState {
@@ -240,6 +280,7 @@ export interface ApiModeration {
   userVisibleReason: string;
   reviewerReason?: string;
   failureReason?: string | null;
+  dualReview: DualReviewComparison | null;
 }
 
 export interface ApiContent {
@@ -278,6 +319,8 @@ export interface ApiAppeal {
   extraContext: string;
   status: "submitted" | "reviewing" | "approved" | "rejected" | "need_more_context";
   counterAnalysis: CounterAnalysis | null;
+  analysisRun: AppealAnalysisRun | null;
+  analysisCount: number;
   finalReason: string | null;
   createdAt: string;
   updatedAt: string;
@@ -298,10 +341,16 @@ export interface ApiReviewTask {
   riskTypes: string[];
   contextTags: string[];
   evidenceCount: number;
+  dualReviewDivergent: boolean;
   createdAt: string;
   resolvedAt?: string;
   finalDecision?: "allow" | "maintain_limit" | "need_more_context";
   reviewReason?: string;
+  originalSuggestedAction?: string;
+  originalSystemDecision?: string;
+  originalRiskLevel?: number;
+  finalRiskLevel?: number | null;
+  wasOverridden?: boolean;
 }
 
 export interface ApiReviewTaskDetail {
@@ -321,6 +370,7 @@ export interface ApiReviewTaskDetail {
     createdAt: string;
   };
   counterAnalysis: CounterAnalysis | null;
+  analysisRun?: AppealAnalysisRun | null;
   timeline: ApiTimelineEvent[];
 }
 
@@ -330,4 +380,50 @@ export interface ContentCreationResult {
   floorNumber: number | null;
   visibleToPublic: boolean;
   moderation: ApiModeration;
+}
+
+export interface ModerationRuleConfig {
+  id: string;
+  version: string;
+  name: string;
+  enabledRiskTypes: string[];
+  autoLimitMinRiskLevel: number;
+  manualReviewMinRiskLevel: number;
+  minConfidence: number;
+  requireGroundedEvidence: boolean;
+  routeDivergenceToManual: boolean;
+  isActive: boolean;
+  changeReason: string;
+  updatedBy: string;
+  createdAt: string;
+}
+
+export interface ModerationStatistics {
+  summary: {
+    totalContents: number;
+    publicContents: number;
+    pendingManualReview: number;
+    limitedContents: number;
+    totalAppeals: number;
+    pendingAppeals: number;
+    appealApprovalRate: number;
+    manualReviews: number;
+    manualOverrides: number;
+    manualOverrideRate: number;
+    dualReviews: number;
+    dualDivergences: number;
+    dualDivergenceRate: number;
+  };
+  riskLevelDistribution: Array<{ name: string; count: number }>;
+  systemDecisionDistribution: Array<{ name: string; count: number }>;
+  last7Days: Array<{ date: string; submissions: number; manualReviews: number }>;
+  runtime: {
+    ruleVersion: string;
+    primaryProvider: string;
+    primaryModel: string;
+    secondaryProvider: string | null;
+    secondaryModel: string | null;
+    dualReviewEnabled: boolean;
+  };
+  generatedAt: string;
 }

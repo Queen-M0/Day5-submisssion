@@ -38,6 +38,31 @@ def moderation_summary(record: Optional[ModerationRecord], detailed: bool = Fals
         "evidence": record.evidence or [],
         "evidenceValid": record.evidence_valid,
         "userVisibleReason": record.user_visible_reason,
+        "dualReview": None
+        if not record.comparison
+        else {
+            "enabled": True,
+            "primary": {
+                "provider": record.provider,
+                "modelVersion": record.model_version,
+                "decision": record.decision,
+                "riskLevel": record.risk_level,
+                "riskTypes": record.risk_types or [],
+            },
+            "secondary": {
+                "provider": record.comparison.secondary_provider,
+                "modelVersion": record.comparison.secondary_model_version,
+                "promptVersion": record.comparison.secondary_prompt_version,
+                "decision": record.comparison.secondary_decision,
+                "riskLevel": record.comparison.secondary_risk_level,
+                "riskTypes": record.comparison.secondary_risk_types or [],
+                "evidenceValid": record.comparison.secondary_evidence_valid,
+            },
+            "divergent": record.comparison.divergent,
+            "reasons": record.comparison.divergence_reasons or [],
+            "systemResolution": record.comparison.system_resolution,
+            "failureReason": record.comparison.failure_reason,
+        },
     }
     if detailed:
         value.update(

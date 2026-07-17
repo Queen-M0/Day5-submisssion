@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { RiskTag } from "../components/RiskTag";
 import { StatusTag } from "../components/StatusTag";
+import { DualReviewPanel } from "../components/DualReviewPanel";
 import { useAuth } from "../context/AuthContext";
 import { useDemo } from "../context/DemoContext";
 import type { DemoFloor } from "../types";
@@ -15,6 +16,9 @@ const demoCases = [
   { label: "安全引用", value: "楼上说“你就是废物”这种话不合适，请不要这样攻击别人。" },
   { label: "连续骚扰", value: "大家都看看他平时是什么样。" },
   { label: "明确威胁", value: "你放学等着，我会让你后悔。" },
+  { label: "低置信度边界", value: "有些人做事就是很有自己的风格，大家自己体会吧。" },
+  { label: "群体施压", value: "大家以后都别理他，让他知道得罪我们的后果。" },
+  { label: "反欺诈提醒", value: "有人私信说先交保证金才能退款，这是典型骗局，大家别转账。" },
 ];
 
 export function TopicDetailPage() {
@@ -89,6 +93,7 @@ export function TopicDetailPage() {
         {result && <div className="moderation-result">
           <div className={`result-banner result-${result.moderation.systemDecision}`}><div>{result.visibleToPublic ? <CheckCircleOutlined /> : <RobotOutlined />}</div><div><StatusTag status={result.status} /><Typography.Title level={4}>{result.visibleToPublic ? `内容已公开为 ${result.floorNumber} 楼` : "内容暂未公开"}</Typography.Title><Typography.Paragraph>{result.moderation.userVisibleReason}</Typography.Paragraph></div></div>
           <div className="result-grid"><div><span>AI 建议</span><strong>{result.moderation.suggestedAction.toUpperCase()}</strong></div><div><span>系统分流</span><strong>{result.moderation.systemDecision.toUpperCase()}</strong></div><div><span>置信度</span><strong>{Math.round(result.moderation.confidence * 100)}%</strong></div></div>
+          <DualReviewPanel value={result.moderation.dualReview} />
           <Typography.Title level={5}>使用的上下文</Typography.Title><Space wrap>{result.moderation.contextUsed.map((item) => <Tag key={item}>{item}</Tag>)}</Space>
           {result.moderation.evidence.length > 0 && <><Typography.Title level={5} className="modal-section-title">可核验证据</Typography.Title>{result.moderation.evidence.map((item) => <div className="verified-evidence" key={item.quote}><span>“{item.quote}”</span><small><CheckCircleOutlined /> 已定位 · {item.reason}</small></div>)}</>}
           {!result.visibleToPublic && <Button type="primary" block className="modal-primary-action" onClick={() => navigate("/my-posts")}>前往“我的发布”查看并申诉</Button>}

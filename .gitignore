@@ -12,3 +12,6 @@ __pycache__/
 node_modules/
 dist/
 .obsidian/
+backend/logs/
+*.log
+*.tsbuildinfo

@@ -18,6 +18,7 @@ class User(Base):
     username: Mapped[str] = mapped_column(String(50), unique=True, index=True)
     display_name: Mapped[str] = mapped_column(String(50))
     role: Mapped[str] = mapped_column(String(20), default="user")
+    password_hash: Mapped[str] = mapped_column(String(255), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
@@ -80,7 +81,10 @@ class Content(Base):
     parent: Mapped[Optional["Content"]] = relationship(remote_side=[id])
     target_user: Mapped[Optional[User]] = relationship(foreign_keys=[target_user_id])
     moderation_records: Mapped[List["ModerationRecord"]] = relationship(
-        back_populates="content", cascade="all, delete-orphan"
+        back_populates="content", cascade="all, delete-orphan", order_by="ModerationRecord.created_at"
+    )
+    moderation_comparisons: Mapped[List["ModerationComparison"]] = relationship(
+        back_populates="content", cascade="all, delete-orphan", order_by="ModerationComparison.created_at"
     )
 
 
@@ -115,6 +119,54 @@ class ModerationRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
     content: Mapped[Content] = relationship(back_populates="moderation_records")
+    comparison: Mapped[Optional["ModerationComparison"]] = relationship(
+        back_populates="primary_record", uselist=False
+    )
+
+
+class ModerationComparison(Base):
+    __tablename__ = "moderation_comparisons"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    content_id: Mapped[str] = mapped_column(ForeignKey("contents.id"), index=True)
+    primary_record_id: Mapped[str] = mapped_column(
+        ForeignKey("moderation_records.id"), unique=True
+    )
+    secondary_provider: Mapped[str] = mapped_column(String(40))
+    secondary_model_version: Mapped[str] = mapped_column(String(80))
+    secondary_prompt_version: Mapped[str] = mapped_column(String(40))
+    secondary_decision: Mapped[str] = mapped_column(String(30))
+    secondary_risk_level: Mapped[int] = mapped_column(Integer)
+    secondary_risk_types: Mapped[List[str]] = mapped_column(JSON, default=list)
+    secondary_evidence: Mapped[List[Dict[str, Any]]] = mapped_column(JSON, default=list)
+    secondary_evidence_valid: Mapped[bool] = mapped_column(Boolean, default=True)
+    secondary_raw_response: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
+    divergent: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    divergence_reasons: Mapped[List[str]] = mapped_column(JSON, default=list)
+    system_resolution: Mapped[str] = mapped_column(String(30), default="agree")
+    failure_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    content: Mapped[Content] = relationship(back_populates="moderation_comparisons")
+    primary_record: Mapped[ModerationRecord] = relationship(back_populates="comparison")
+
+
+class ModerationRuleConfig(Base):
+    __tablename__ = "moderation_rule_configs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    version: Mapped[str] = mapped_column(String(40), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(80), default="社区审核规则")
+    enabled_risk_types: Mapped[List[str]] = mapped_column(JSON, default=list)
+    auto_limit_min_risk_level: Mapped[int] = mapped_column(Integer, default=3)
+    manual_review_min_risk_level: Mapped[int] = mapped_column(Integer, default=2)
+    min_confidence: Mapped[float] = mapped_column(Float, default=0.65)
+    require_grounded_evidence: Mapped[bool] = mapped_column(Boolean, default=True)
+    route_divergence_to_manual: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    change_reason: Mapped[str] = mapped_column(Text, default="初始化默认规则")
+    updated_by: Mapped[str] = mapped_column(String(36), default="system")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
 class Appeal(Base):
@@ -134,6 +186,25 @@ class Appeal(Base):
 
     content: Mapped[Content] = relationship()
     user: Mapped[User] = relationship()
+    analysis_records: Mapped[List["AppealAnalysisRecord"]] = relationship(
+        back_populates="appeal", cascade="all, delete-orphan", order_by="AppealAnalysisRecord.created_at"
+    )
+
+
+class AppealAnalysisRecord(Base):
+    __tablename__ = "appeal_analysis_records"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    appeal_id: Mapped[str] = mapped_column(ForeignKey("appeals.id"), index=True)
+    provider: Mapped[str] = mapped_column(String(40))
+    prompt_version: Mapped[str] = mapped_column(String(40))
+    model_version: Mapped[str] = mapped_column(String(80))
+    analysis: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
+    evidence_valid: Mapped[bool] = mapped_column(Boolean, default=True)
+    failure_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    appeal: Mapped[Appeal] = relationship(back_populates="analysis_records")
 
 
 class ManualReview(Base):

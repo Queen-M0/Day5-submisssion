@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 
 os.environ["DATABASE_URL"] = "sqlite:///./test_contextguard.db"
+os.environ["AI_PROVIDER"] = "mock"
 
 import pytest
 from fastapi.testclient import TestClient
@@ -28,6 +29,6 @@ def database():
 
 @pytest.fixture()
 def client():
-    with TestClient(app) as test_client:
+    with TestClient(app, headers={"X-User-Id": "student_a"}) as test_client:
         yield test_client
 

@@ -13,8 +13,8 @@ export function ReviewerDashboard() {
   const { reviewTasks, findFloor, findAppeal } = useDemo();
   const [filter, setFilter] = useState("全部任务");
   const pending = reviewTasks.filter((task) => task.status === "pending");
-  const tasks = filter === "用户申诉" ? pending.filter((task) => task.source === "user_appeal") : filter === "AI 转人工" ? pending.filter((task) => task.source === "ai_escalation") : pending;
-  const stats = useMemo(() => ({ appeals: pending.filter((item) => item.source === "user_appeal").length, escalations: pending.filter((item) => item.source === "ai_escalation").length, high: pending.filter((item) => findFloor(item.contentId)?.floor.moderation.riskLevel === 3).length }), [findFloor, pending]);
+  const tasks = filter === "用户申诉" ? pending.filter((task) => task.source === "user_appeal") : filter === "AI 转人工" ? pending.filter((task) => task.source === "ai_escalation") : filter === "模型分歧" ? pending.filter((task) => task.dualReviewDivergent) : pending;
+  const stats = useMemo(() => ({ appeals: pending.filter((item) => item.source === "user_appeal").length, escalations: pending.filter((item) => item.source === "ai_escalation").length, divergent: pending.filter((item) => item.dualReviewDivergent).length }), [pending]);
   const userName = (id: string) => users.find((item) => item.id === id)?.displayName ?? "社区用户";
 
   return <div className="page reviewer-dashboard-page">
@@ -23,9 +23,9 @@ export function ReviewerDashboard() {
       <Statistic title="待复核总数" value={pending.length} prefix={<InboxOutlined />} />
       <Statistic title="用户申诉" value={stats.appeals} prefix={<UserSwitchOutlined />} />
       <Statistic title="AI 主动转人工" value={stats.escalations} prefix={<RobotOutlined />} />
-      <Statistic title="高风险优先" value={stats.high} prefix={<ExclamationCircleOutlined />} />
+      <Statistic title="双模型分歧" value={stats.divergent} prefix={<ExclamationCircleOutlined />} />
     </section>
-    <div className="queue-toolbar"><div><Typography.Title level={3}>待复核队列</Typography.Title><Typography.Text type="secondary">申诉优先，其次按进入队列时间排序</Typography.Text></div><Segmented value={filter} onChange={(value) => setFilter(String(value))} options={["全部任务", "用户申诉", "AI 转人工"]} /></div>
+    <div className="queue-toolbar"><div><Typography.Title level={3}>待复核队列</Typography.Title><Typography.Text type="secondary">申诉优先，其次按进入队列时间排序</Typography.Text></div><Segmented value={filter} onChange={(value) => setFilter(String(value))} options={["全部任务", "用户申诉", "AI 转人工", "模型分歧"]} /></div>
     {tasks.length === 0 ? <Empty image={<InboxOutlined className="large-empty-icon" />} description="当前筛选下没有待处理任务" /> : <div className="review-task-grid">
       {tasks.map((task) => {
         const found = findFloor(task.contentId);
@@ -33,7 +33,7 @@ export function ReviewerDashboard() {
         const { floor, topic } = found;
         const appeal = findAppeal(floor.id);
         return <Card key={task.id} className={`review-task-card priority-${task.priority}`} hoverable onClick={() => navigate(`/reviewer/${task.id}`)}>
-          <div className="task-card-head"><Space><Tag color={task.source === "user_appeal" ? "blue" : "gold"}>{task.source === "user_appeal" ? "用户申诉" : "AI 主动转人工"}</Tag>{task.priority === "high" && <Tag color="red">优先处理</Tag>}</Space><Typography.Text type="secondary">等待 {dayjs().diff(dayjs(task.createdAt), "minute")} 分钟</Typography.Text></div>
+          <div className="task-card-head"><Space><Tag color={task.source === "user_appeal" ? "blue" : "gold"}>{task.source === "user_appeal" ? "用户申诉" : "AI 主动转人工"}</Tag>{task.priority === "high" && <Tag color="red">优先处理</Tag>}{task.dualReviewDivergent && <Tag color="volcano">双模型分歧</Tag>}</Space><Typography.Text type="secondary">等待 {dayjs().diff(dayjs(task.createdAt), "minute")} 分钟</Typography.Text></div>
           <Typography.Text type="secondary">{topic.title}</Typography.Text>
           <Typography.Paragraph className="task-quote" ellipsis={{ rows: 2 }}>“{floor.text}”</Typography.Paragraph>
           <div className="task-author-row"><span>发布者：<strong>{userName(floor.authorId)}</strong></span><span>{dayjs(floor.createdAt).format("MM-DD HH:mm")}</span></div>

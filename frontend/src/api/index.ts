@@ -9,10 +9,18 @@ import type {
   CommunitySummary,
   ContentCreationResult,
   DemoUser,
+  ModerationRuleConfig,
+  ModerationStatistics,
 } from "../types";
 
 export const getDemoUsers = async () =>
   (await api.get<{ items: DemoUser[] }>("/auth/demo-users")).data.items;
+
+export const login = async (payload: { username: string; password: string }) =>
+  (await api.post<{ accessToken: string; tokenType: string; expiresIn: number; user: DemoUser }>("/auth/login", payload)).data;
+
+export const getCurrentUser = async () =>
+  (await api.get<DemoUser>("/auth/me")).data;
 
 export const getCommunity = async () =>
   (await api.get<CommunitySummary>("/community")).data;
@@ -54,6 +62,9 @@ export const submitAppeal = async (
   payload: { appealType: string; reason: string; extraContext: string },
 ) => (await api.post(`/contents/${contentId}/appeals`, payload)).data;
 
+export const supplementAppeal = async (appealId: string, extraContext: string) =>
+  (await api.post(`/appeals/${appealId}/supplement`, { extraContext })).data;
+
 export const getMyAppeals = async () =>
   (await api.get<{ items: ApiAppeal[] }>("/me/appeals")).data.items;
 
@@ -72,3 +83,23 @@ export const submitReviewDecision = async (
     reviewReason: string;
   },
 ) => (await api.post(`/reviewer/tasks/${taskId}/decision`, payload)).data;
+
+export const getModerationStatistics = async () =>
+  (await api.get<ModerationStatistics>("/reviewer/statistics")).data;
+
+export const getModerationRules = async () =>
+  (await api.get<ModerationRuleConfig>("/reviewer/rules")).data;
+
+export const getModerationRuleHistory = async () =>
+  (await api.get<{ items: ModerationRuleConfig[] }>("/reviewer/rules/history")).data.items;
+
+export const updateModerationRules = async (payload: {
+  name: string;
+  enabledRiskTypes: string[];
+  autoLimitMinRiskLevel: number;
+  manualReviewMinRiskLevel: number;
+  minConfidence: number;
+  requireGroundedEvidence: boolean;
+  routeDivergenceToManual: boolean;
+  changeReason: string;
+}) => (await api.put<ModerationRuleConfig>("/reviewer/rules", payload)).data;

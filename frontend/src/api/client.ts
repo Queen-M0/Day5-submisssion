@@ -6,8 +6,8 @@ export const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-  const userId = localStorage.getItem("contextguard.userId") ?? "student_a";
-  config.headers.set("X-User-Id", userId);
+  const token = localStorage.getItem("contextguard.accessToken");
+  if (token) config.headers.set("Authorization", `Bearer ${token}`);
   return config;
 });
 

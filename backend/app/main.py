@@ -3,8 +3,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import appeals, auth, community, contents, me, reviewer, scenes, topics
+from app.api import appeals, auth, community, contents, me, reviewer, rules, scenes, statistics, topics
 from app.core.config import get_settings
+from app.api.dependencies import provider, secondary_provider
 
 
 settings = get_settings()
@@ -38,8 +39,19 @@ app.include_router(contents.router, prefix="/api")
 app.include_router(me.router, prefix="/api")
 app.include_router(appeals.router, prefix="/api")
 app.include_router(reviewer.router, prefix="/api")
+app.include_router(rules.router, prefix="/api")
+app.include_router(statistics.router, prefix="/api")
 
 
 @app.get("/api/health", tags=["system"])
 def health():
-    return {"status": "ok", "service": settings.app_name, "environment": settings.app_env}
+    return {
+        "status": "ok",
+        "service": settings.app_name,
+        "environment": settings.app_env,
+        "aiProvider": provider.name,
+        "aiModel": provider.model_version,
+        "dualReviewEnabled": secondary_provider is not None,
+        "secondaryAiProvider": secondary_provider.name if secondary_provider else None,
+        "secondaryAiModel": secondary_provider.model_version if secondary_provider else None,
+    }

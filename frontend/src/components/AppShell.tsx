@@ -1,5 +1,6 @@
 import {
   AuditOutlined,
+  BarChartOutlined,
   CommentOutlined,
   FileDoneOutlined,
   HistoryOutlined,
@@ -7,10 +8,12 @@ import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   ReloadOutlined,
+  LogoutOutlined,
   SafetyCertificateOutlined,
+  SettingOutlined,
   UserOutlined,
 } from "@ant-design/icons";
-import { Alert, Avatar, Button, Layout, Menu, Select, Space, Spin, Tag, Tooltip, Typography } from "antd";
+import { Alert, Avatar, Button, Layout, Menu, Space, Spin, Tag, Tooltip, Typography } from "antd";
 import { useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -20,7 +23,7 @@ const { Header, Sider, Content } = Layout;
 
 export function AppShell() {
   const [collapsed, setCollapsed] = useState(false);
-  const { user, users, selectUser } = useAuth();
+  const { user, logout } = useAuth();
   const { resetDemo, loading, error } = useDemo();
   const location = useLocation();
   const navigate = useNavigate();
@@ -29,6 +32,8 @@ export function AppShell() {
     ? [
         { key: "/reviewer", icon: <AuditOutlined />, label: "待复核队列" },
         { key: "/reviewer/history", icon: <HistoryOutlined />, label: "复核记录" },
+        { key: "/reviewer/statistics", icon: <BarChartOutlined />, label: "数据统计看板" },
+        { key: "/reviewer/rules", icon: <SettingOutlined />, label: "审核规则配置" },
       ]
     : [
         { key: "/community", icon: <HomeOutlined />, label: "社区首页" },
@@ -38,6 +43,8 @@ export function AppShell() {
 
   const activeKey = location.pathname.startsWith("/topics/") ? "/community"
     : location.pathname.startsWith("/reviewer/history") ? "/reviewer/history"
+    : location.pathname.startsWith("/reviewer/statistics") ? "/reviewer/statistics"
+    : location.pathname.startsWith("/reviewer/rules") ? "/reviewer/rules"
     : location.pathname.startsWith("/reviewer") ? "/reviewer"
     : location.pathname;
 
@@ -66,18 +73,9 @@ export function AppShell() {
           </div>
           <Space size={12} className="user-switcher">
             <div className="identity-copy"><Typography.Text type="secondary">当前演示身份</Typography.Text><Typography.Text strong>{reviewer ? "审核员端" : "普通用户端"}</Typography.Text></div>
-            <Select
-              value={user.id}
-              onChange={(value) => {
-                selectUser(value);
-                const next = users.find((item) => item.id === value);
-                navigate(next?.role === "user" ? "/community" : "/reviewer");
-              }}
-              options={users.map((item) => ({ label: `${item.displayName} · ${item.role === "user" ? "普通用户" : "审核员"}`, value: item.id }))}
-              popupMatchSelectWidth={235}
-              className="identity-select"
-            />
+            <Tag color={reviewer ? "geekblue" : "green"}>{user.displayName} · {reviewer ? "审核员" : "普通用户"}</Tag>
             <Avatar className={reviewer ? "reviewer-avatar" : "user-avatar"}>{user.displayName.slice(0, 1)}</Avatar>
+            <Tooltip title="退出登录"><Button type="text" icon={<LogoutOutlined />} onClick={() => { logout(); navigate("/login", { replace: true }); }} /></Tooltip>
           </Space>
         </Header>
         <Content className="app-content">{error && <Alert type="error" showIcon closable message="后端数据加载失败" description={error} style={{ margin: 20 }} />}<Outlet />{loading && <Spin fullscreen tip="正在读取后端数据…" />}</Content>

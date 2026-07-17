@@ -1,10 +1,11 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from app.api.dependencies import moderation_service
+from app.api.dependencies import appeal_service, moderation_service
 from app.core.database import SessionLocal
 from app.models import Appeal, AuditLog, Content, ModerationRecord, Scene, Topic, User
 from app.services.text_service import normalize_text
+from app.services.auth_service import hash_password
 
 
 USERS = [
@@ -116,12 +117,16 @@ def seed() -> None:
         for user_id, username, display_name, role in USERS:
             user = db.get(User, user_id)
             if not user:
-                user = User(id=user_id, username=username, display_name=display_name, role=role)
+                password = "review123" if role in {"reviewer", "admin"} else "user123"
+                user = User(id=user_id, username=username, display_name=display_name, role=role, password_hash=hash_password(password))
                 db.add(user)
             else:
                 user.username = username
                 user.display_name = display_name
                 user.role = role
+                if not user.password_hash:
+                    password = "review123" if role in {"reviewer", "admin"} else "user123"
+                    user.password_hash = hash_password(password)
 
         scene = db.get(Scene, "community-001")
         if not scene:
@@ -209,7 +214,8 @@ def seed() -> None:
             add_audit(db, "student_b", "content.submitted", content.id, {"topicId": "topic-ai-camp"})
             moderation_service.review(db, content)
 
-        if not db.get(Appeal, "appeal-quote"):
+        appeal = db.get(Appeal, "appeal-quote")
+        if not appeal:
             appeal = Appeal(
                 id="appeal-quote",
                 content_id="floor-quote",
@@ -224,6 +230,9 @@ def seed() -> None:
             )
             db.add(appeal)
             add_audit(db, "student_a", "appeal.submitted", "floor-quote", {"appealId": appeal.id})
+            db.flush()
+        if not appeal.counter_analysis:
+            appeal_service.analyze(db, appeal)
 
         for topic_id, _, _, _, _, view_count, _, last_active_at in TOPICS:
             topic = db.get(Topic, topic_id)
