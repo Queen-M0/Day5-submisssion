@@ -207,6 +207,71 @@
 | **验证** | 提交前执行 staged sensitive path 检查、`git diff --check`、pytest 和前端 build |
 | **证据** | `.gitignore`、`docs/P0_AI审核与申诉闭环实施说明.md`、`docs/P1_完整功能实施过程与汇报说明.md` |
 
+## 第 14 条：搭建团队共享远端 MySQL 联调库
+
+| 字段 | 内容 |
+| --- | --- |
+| **日期** | 2026-07-17 |
+| **目的** | 让不同成员不再只连各自本地 `127.0.0.1` 数据库，而是可以使用同一套团队 dev 数据进行联调 |
+| **输入** | 云服务器 `122.51.176.83`、MySQL root 终端、数据库名 `ai_moderation`、应用账号 `contextguard` |
+| **AI 建议** | 先建库和应用账号，再只授予目标库权限；密码只通过本地 `.env` 使用，不写入 Git |
+| **人工判断** | 采纳共享 dev 库方案；拒绝把数据库密码或完整连接串直接提交到仓库 |
+| **最终实现** | 在云端创建 `ai_moderation`，授权 `contextguard@%` 访问目标库，并确认数据库和授权记录存在 |
+| **验证** | `SHOW DATABASES LIKE 'ai_moderation'` 返回目标库；`SHOW GRANTS FOR 'contextguard'@'%'` 显示目标库授权 |
+| **证据** | 云端 MySQL 执行记录、`backend/.env.example`、`docs/本地开发与数据库协作说明.md` |
+
+## 第 15 条：将远端 MySQL 纳入 Alembic 迁移和 Seed 验证
+
+| 字段 | 内容 |
+| --- | --- |
+| **日期** | 2026-07-17 |
+| **目的** | 确认云端数据库不是空配置，而是真的能承载后端当前表结构和演示数据 |
+| **输入** | 本地 `backend/.env` 中的远端 `DATABASE_URL`、Alembic 迁移历史、幂等 Seed 脚本 |
+| **AI 建议** | 使用 conda `py310` 环境执行迁移和 Seed；先验证连接，再跑 `upgrade head`，避免只靠本地 SQLite 通过 |
+| **人工判断** | 采纳真实 MySQL 验证；不把远端密码写入测试命令、日志或提交内容 |
+| **最终实现** | 对远端 MySQL 执行 `alembic upgrade head`，随后运行 `python -m app.seed.seed_demo` 写入/复用演示数据 |
+| **验证** | Alembic 升级完成；Seed 输出演示数据 ready；后端测试在 `py310` 环境通过 |
+| **证据** | `backend/migrations/versions/`、`backend/app/seed/seed_demo.py`、`backend/tests/` |
+
+## 第 16 条：真实 MiMo API 联调与超时参数收敛
+
+| 字段 | 内容 |
+| --- | --- |
+| **日期** | 2026-07-17 |
+| **目的** | 确认项目不是只依赖 Mock Provider，真实小米 MiMo API 可以在当前工作流中运行 |
+| **输入** | 本地私有 MiMo Key、`mimo-v2.5`、`mimo-v2.5-pro`、后端 `/api/health` 和 Provider 调用链 |
+| **AI 建议** | 先测 OpenAI-compatible 基础请求，再测项目 Provider；真实 Key 只放本地环境变量 |
+| **人工判断** | 采纳真实 API 校验；发现默认输出 token 太大导致超时后，调整模板默认值而不是把失败隐藏为 Mock 成功 |
+| **最终实现** | 保持 `AI_PROVIDER=auto/mimo/mock` 模式；将 `MIMO_MAX_TOKENS` 示例默认值收敛为 `400`，减少真实联调超时 |
+| **验证** | `/api/health` 返回真实 Provider 和模型名；MiMo `/models` 与最小 chat completions 请求成功；项目 Provider 在较小 token 设置下完成 |
+| **证据** | `backend/app/providers/factory.py`、`backend/app/providers/mimo_provider.py`、`backend/.env.example` |
+
+## 第 17 条：合并后前后端真实运行验收
+
+| 字段 | 内容 |
+| --- | --- |
+| **日期** | 2026-07-17 |
+| **目的** | 在合并到 `main` 前确认代码、数据库、真实 AI 配置和前端页面能一起工作 |
+| **输入** | 合并后的 `main`、远端 MySQL、conda `py310`、前端 Vite 项目 |
+| **AI 建议** | 先跑后端测试和前端构建，再启动 FastAPI 与 Vite，最后用健康检查和页面访问确认 |
+| **人工判断** | 采纳完整本地验收；验收完成后按用户要求关闭 8000 和 5173 服务，避免后台进程遗留 |
+| **最终实现** | 后端在 `py310` 环境运行，前端 Vite 可访问；验收完成后停止前后端进程 |
+| **验证** | `pytest backend/tests` 通过；`npm run build` 通过；后端健康检查 HTTP 200；前端页面可打开 |
+| **证据** | `backend/tests/`、`frontend/package.json`、`frontend/vite.config.ts` |
+
+## 第 18 条：补齐远端数据库配置说明并推送 main
+
+| 字段 | 内容 |
+| --- | --- |
+| **日期** | 2026-07-17 |
+| **目的** | 解决合作方拉取远端 `main` 后仍看到 `127.0.0.1` 数据库模板、无法判断远端主机的问题 |
+| **输入** | 合作方反馈、远端 MySQL 主机、账号、库名、现有 `.env.example` 和协作文档 |
+| **AI 建议** | 在仓库中提交可共享的主机、端口、库名和账号；密码继续使用占位符并由成员本地填写 |
+| **人工判断** | 采纳“可复现但不泄密”的模板；不提交真实数据库密码和真实 AI Key |
+| **最终实现** | `backend/.env.example` 增加注释版远端连接模板；README 和数据库协作文档补充远端库说明 |
+| **验证** | `git diff --check` 通过；敏感信息检查未发现真实密码；提交 `d731a32` 已推送到远端 `main` |
+| **证据** | `README.md`、`backend/.env.example`、`docs/本地开发与数据库协作说明.md`、Git 提交 `d731a32` |
+
 ---
 
 ## 人工采纳、修改与拒绝汇总
