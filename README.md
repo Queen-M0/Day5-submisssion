@@ -45,6 +45,8 @@ AI_DUAL_REVIEW_ENABLED=true
 
 `AI_PROVIDER=auto` 会在存在密钥时使用 MiMo，否则使用确定性的 Mock Provider。也可以设置为 `mimo` 强制走真实模型，或设为 `mock` 进行离线回归。模型超时、HTTP 错误、非法 JSON、Schema 不匹配和证据无法定位都会安全转入人工复核，不会自动放行。`GET /api/health` 会返回当前生效的 Provider 和模型名，但不会返回密钥。
 
+团队共享远端 MySQL 的连接模板见 `backend/.env.example` 和 `docs/本地开发与数据库协作说明.md`。当前联调库为 `122.51.176.83:3306/ai_moderation`，账号 `contextguard`；密码只写入个人本地 `backend/.env`，不得提交 Git。
+
 `scripts/bootstrap_db.sh` 会启动并等待 MySQL 8.4、执行全部 Alembic 迁移、写入幂等演示 Seed，并检查模型与迁移是否一致。
 
 后端地址为 `http://127.0.0.1:8000`，OpenAPI 文档为 `http://127.0.0.1:8000/docs`。
