@@ -12,6 +12,7 @@ class MockAppealCriticProvider(AppealCriticProvider):
 
     name = "mock-appeal-critic"
     prompt_version = "mock-appeal-v1"
+    appeal_prompt_version = "mock-appeal-v1"
     model_version = "mock-rules-v1"
     rule_version = "appeal-community-v1"
 

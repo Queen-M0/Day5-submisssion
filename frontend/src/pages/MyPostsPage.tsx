@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { RiskTag } from "../components/RiskTag";
 import { StatusTag } from "../components/StatusTag";
+import { DualReviewPanel } from "../components/DualReviewPanel";
 import { useAuth } from "../context/AuthContext";
 import { useDemo } from "../context/DemoContext";
 import type { DemoFloor, DemoTopic } from "../types";
@@ -89,6 +90,7 @@ export function MyPostsPage() {
             <Descriptions.Item label="AI 建议">{selected.floor.moderation.suggestedAction}</Descriptions.Item>
             <Descriptions.Item label="系统分流">{selected.floor.moderation.systemDecision}</Descriptions.Item>
           </Descriptions>
+          <DualReviewPanel value={selected.floor.moderation.dualReview} />
           <Typography.Title level={5}>上下文与不确定点</Typography.Title><Space wrap>{selected.floor.moderation.contextUsed.map((item) => <Tag key={item}>{item}</Tag>)}</Space>
           {selected.floor.moderation.uncertainties.map((item) => <div className="uncertainty-item" key={item}>{item}</div>)}
           <Typography.Title level={5}>证据校验</Typography.Title>

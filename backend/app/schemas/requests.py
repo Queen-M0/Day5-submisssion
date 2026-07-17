@@ -1,6 +1,6 @@
-from typing import Literal, Optional
+from typing import List, Literal, Optional
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 from app.schemas.common import APIModel
 
@@ -75,6 +75,23 @@ class SubmitAppealRequest(APIModel):
         return value
 
 
+class LoginRequest(APIModel):
+    username: str = Field(min_length=2, max_length=50)
+    password: str = Field(min_length=6, max_length=100)
+
+
+class AppealSupplementRequest(APIModel):
+    extra_context: str = Field(min_length=5, max_length=2000)
+
+    @field_validator("extra_context")
+    @classmethod
+    def validate_extra_context(cls, value: str) -> str:
+        value = value.strip()
+        if len(value) < 5:
+            raise ValueError("补充上下文至少 5 个字符")
+        return value
+
+
 class ReviewDecisionRequest(APIModel):
     final_decision: Literal["allow", "maintain_limit", "need_more_context"]
     final_risk_level: Optional[int] = Field(default=None, ge=0, le=3)
@@ -88,3 +105,29 @@ class ReviewDecisionRequest(APIModel):
         if len(value) < 5:
             raise ValueError("复核理由至少 5 个字符")
         return value
+
+
+class UpdateModerationRulesRequest(APIModel):
+    name: str = Field(min_length=2, max_length=80)
+    enabled_risk_types: List[str] = Field(min_length=1)
+    auto_limit_min_risk_level: int = Field(ge=1, le=3)
+    manual_review_min_risk_level: int = Field(ge=1, le=3)
+    min_confidence: float = Field(ge=0, le=1)
+    require_grounded_evidence: bool = True
+    route_divergence_to_manual: bool = True
+    change_reason: str = Field(min_length=5, max_length=500)
+
+    @field_validator("enabled_risk_types")
+    @classmethod
+    def validate_risk_types(cls, value: List[str]) -> List[str]:
+        allowed = {"insult", "harassment", "threat", "fraud", "discrimination", "implicit_attack"}
+        invalid = set(value) - allowed
+        if invalid:
+            raise ValueError(f"不支持的风险类型: {', '.join(sorted(invalid))}")
+        return list(dict.fromkeys(value))
+
+    @model_validator(mode="after")
+    def validate_threshold_order(self):
+        if self.manual_review_min_risk_level > self.auto_limit_min_risk_level:
+            raise ValueError("人工复核阈值不能高于自动限制阈值")
+        return self

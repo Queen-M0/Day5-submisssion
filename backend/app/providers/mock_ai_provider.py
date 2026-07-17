@@ -1,16 +1,18 @@
 import re
 from typing import List, Tuple
 
-from app.providers.ai_provider import ModerationInput, ModerationProvider
-from app.schemas.common import EvidenceItem, ModerationResult
+from app.providers.ai_provider import AppealInput, ModerationInput, ModerationProvider
+from app.schemas.common import CounterAnalysisResult, EvidenceItem, ModerationResult
 
 
 class MockAIProvider(ModerationProvider):
     """Deterministic provider for demos and regression tests."""
 
     name = "mock-ai"
-    prompt_version = "mock-v1"
-    model_version = "mock-rules-v1"
+    model_version = "mock-rules-v2"
+    prompt_version = "mock-moderation-v2"
+    moderation_prompt_version = "mock-moderation-v2"
+    appeal_prompt_version = "mock-appeal-critic-v1"
     rule_version = "community-v1"
 
     safe_markers = ("不合适", "请管理员", "举报", "不要说", "不能说", "引用", "反对")
@@ -33,7 +35,7 @@ class MockAIProvider(ModerationProvider):
                 risk_types=["safe_context"],
                 decision="publish",
                 confidence=0.91,
-                evidence=[EvidenceItem(text=self._first_match(text, self.safe_markers), reason="存在明确的引用、反驳或举报语境", risk_type="safe_context")],
+                evidence=[EvidenceItem(content_id=payload.content_id, text=self._first_match(text, self.safe_markers), reason="存在明确的引用、反驳或举报语境", risk_type="safe_context")],
                 context_reasoning="内容虽然可能包含攻击性词语，但作者在引用并反对该表达。",
                 user_reason="已识别为引用或举报语境，内容已发布。",
                 reviewer_reason="Mock Provider 识别到安全语境标记，未将命中的攻击词直接判为违规。",
@@ -54,7 +56,7 @@ class MockAIProvider(ModerationProvider):
                 risk_types=[high_type],
                 decision="limit",
                 confidence=0.94,
-                evidence=[EvidenceItem(text=high_term, reason=reason_map[high_type], risk_type=high_type)],
+                evidence=[EvidenceItem(content_id=payload.content_id, text=high_term, reason=reason_map[high_type], risk_type=high_type)],
                 context_reasoning="当前内容包含明确且可定位的高风险证据。",
                 user_reason="这条内容可能涉及针对他人的不友善或高风险表达，暂未公开。",
                 reviewer_reason=f"命中 {high_type} 演示规则，证据片段为“{high_term}”。",
@@ -74,7 +76,7 @@ class MockAIProvider(ModerationProvider):
                 risk_types=["harassment", "implicit_attack"],
                 decision="manual_review",
                 confidence=0.78,
-                evidence=[EvidenceItem(text=term, reason="可能构成反讽、外号或暗示性攻击", risk_type="implicit_attack") for term in implicit[:2]],
+                evidence=[EvidenceItem(content_id=payload.content_id, text=term, reason="可能构成反讽、外号或暗示性攻击", risk_type="implicit_attack") for term in implicit[:2]],
                 context_reasoning="表达未必含明显敏感词，但存在指向不清的反讽或暗示，需要结合上下文人工判断。",
                 user_reason="内容可能涉及针对他人的暗示性评价，已进入人工复核。",
                 reviewer_reason="请核对回复对象及同一作者近期发言，判断是否形成连续针对。",
@@ -93,6 +95,32 @@ class MockAIProvider(ModerationProvider):
             context_reasoning="当前文本和可用上下文未发现明确风险证据。",
             user_reason="内容已发布。",
             reviewer_reason="Mock Provider 未命中高风险或复杂语境规则。",
+        )
+
+    def analyze_appeal(self, payload: AppealInput) -> CounterAnalysisResult:
+        change_markers = ("引用", "台词", "举报", "反对", "缺少前文", "不是现实")
+        combined = f"{payload.reason}\n{payload.extra_context}"
+        supports_change = any(marker in combined for marker in change_markers)
+        if supports_change:
+            quote = next((marker for marker in change_markers if marker in combined), payload.reason[:20])
+            source_id = "appeal-extra-context" if quote in payload.extra_context else "appeal-reason"
+            return CounterAnalysisResult(
+                supports_original_decision=["原文包含可能引发风险的直接表达，第一次限制具有安全依据。"],
+                supports_change=["申诉补充了引用、台词或反对攻击的语境，第一次判断可能混淆了说话者归属。"],
+                new_evidence_impact="新增上下文显著削弱原判，应由审核员核对后考虑改判。",
+                remaining_uncertainties=["仍需人工确认补充上下文是否与原讨论一致。"],
+                review_suggestion="allow",
+                reviewer_summary="原判有表面文本依据，但申诉提供了足以挑战原判的新语境。",
+                evidence=[EvidenceItem(content_id=source_id, text=quote, reason="申诉材料提供了可能改变说话者与意图判断的新信息", risk_type="counter_evidence")],
+            )
+        return CounterAnalysisResult(
+            supports_original_decision=["申诉未提供足以推翻原始风险证据的新信息。"],
+            supports_change=[],
+            new_evidence_impact="新增信息对第一次判断影响有限。",
+            remaining_uncertainties=["需要人工确认当事人关系和真实交流场景。"],
+            review_suggestion="maintain_limit",
+            reviewer_summary="当前材料更支持维持原判，但最终结果仍由人工决定。",
+            evidence=[],
         )
 
     def _match_high_risk(self, text: str) -> Tuple[str, str]:

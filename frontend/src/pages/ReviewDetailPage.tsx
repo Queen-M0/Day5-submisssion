@@ -4,6 +4,7 @@ import dayjs from "dayjs";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { RiskLevelTag, RiskTag } from "../components/RiskTag";
+import { DualReviewPanel } from "../components/DualReviewPanel";
 import { useAuth } from "../context/AuthContext";
 import { useDemo } from "../context/DemoContext";
 import { apiErrorMessage } from "../api/client";
@@ -54,14 +55,21 @@ export function ReviewDetailPage() {
         <Descriptions column={1} size="small" className="review-descriptions">
           <Descriptions.Item label="说话者">{userName(floor.authorId)}</Descriptions.Item><Descriptions.Item label="涉及对象">{floor.moderation.targetUserIds.map(userName).join("、") || "未识别特定对象"}</Descriptions.Item><Descriptions.Item label="表达意图">{floor.moderation.intent}</Descriptions.Item><Descriptions.Item label="AI 建议">{floor.moderation.suggestedAction.toUpperCase()}</Descriptions.Item><Descriptions.Item label="系统分流">{floor.moderation.systemDecision.toUpperCase()}</Descriptions.Item>
         </Descriptions>
+        <DualReviewPanel value={floor.moderation.dualReview} />
         <Typography.Title level={5}>证据真实性校验</Typography.Title>
         {floor.moderation.evidence.map((item) => <div className="review-evidence" key={item.quote}><div><CheckCircleOutlined /> 已定位 · {item.contentId}</div><blockquote>{item.quote}</blockquote><p>{item.reason}</p></div>)}
         <Alert type="warning" showIcon message="仍有不确定点" description={floor.moderation.uncertainties.join("；") || "暂无"} />
         {appeal && <div className="counter-analysis">
           <div className="counter-title"><RobotOutlined /><div><strong>申诉反证 AI</strong><small>主动挑战第一次判断，不直接给出终审结果</small></div></div>
           <div className="appeal-copy"><span>用户申诉</span><p>{appeal.reason}</p><small>补充上下文：{appeal.extraContext}</small></div>
+          {appeal.analysisRun && <Descriptions size="small" column={1} className="review-descriptions">
+            <Descriptions.Item label="反证模型">{appeal.analysisRun.provider} / {appeal.analysisRun.modelVersion}</Descriptions.Item>
+            <Descriptions.Item label="Prompt 版本">{appeal.analysisRun.promptVersion}</Descriptions.Item>
+            <Descriptions.Item label="证据校验">{appeal.analysisRun.evidenceValid ? "通过" : "未通过，已转人工"}</Descriptions.Item>
+          </Descriptions>}
+          {appeal.analysisRun?.failureReason && <Alert type="error" showIcon message="反证 Agent 已降级" description={appeal.analysisRun.failureReason} />}
           {appeal.counterAnalysis ? <><div className="argument-grid"><div className="argument-original"><strong><CloseCircleOutlined /> 支持维持原判</strong>{appeal.counterAnalysis.supportsOriginalDecision.map((item) => <p key={item}>{item}</p>)}</div><div className="argument-change"><strong><CheckCircleOutlined /> 支持改判</strong>{appeal.counterAnalysis.supportsChange.map((item) => <p key={item}>{item}</p>)}</div></div>
-          <div className="counter-conclusion"><span>新证据影响</span><p>{appeal.counterAnalysis.newEvidenceImpact}</p><strong>{appeal.counterAnalysis.reviewSuggestion}</strong></div></> : <Alert type="info" showIcon message="申诉反证 Agent 暂未接入" description="当前仅保存用户申诉理由和补充上下文，由审核员直接进行人工判断。" />}
+          <div className="counter-conclusion"><span>新证据影响</span><p>{appeal.counterAnalysis.newEvidenceImpact}</p><span>给人工的建议（不自动裁决）</span><strong>{appeal.counterAnalysis.reviewSuggestion}</strong></div></> : <Alert type="info" showIcon message="暂无反证结果" description="反证分析不可用时，审核员必须直接核对原文和申诉材料。" />}
         </div>}
       </section>
 

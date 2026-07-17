@@ -62,6 +62,7 @@ class RealModerationProvider(ModerationProvider):
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.prompt_version = prompt_version
+        self.moderation_prompt_version = prompt_version
         self.model_version = model
         self.rule_version = rule_version
         self.timeout = timeout

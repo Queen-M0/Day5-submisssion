@@ -1,12 +1,14 @@
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from "react";
-import { getDemoUsers } from "../api";
+import { getCurrentUser, getDemoUsers, login as loginRequest } from "../api";
 import type { DemoUser } from "../types";
 
 interface AuthContextValue {
   user: DemoUser;
   users: DemoUser[];
   loading: boolean;
-  selectUser: (userId: string) => void;
+  isAuthenticated: boolean;
+  login: (username: string, password: string) => Promise<DemoUser>;
+  logout: () => void;
 }
 
 const fallbackUsers: DemoUser[] = [
@@ -20,35 +22,50 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [users, setUsers] = useState<DemoUser[]>(fallbackUsers);
+  const [user, setUser] = useState<DemoUser>(fallbackUsers[0]);
   const [loading, setLoading] = useState(true);
-  const [userId, setUserId] = useState(() => localStorage.getItem("contextguard.userId") ?? "student_a");
+  const [isAuthenticated, setAuthenticated] = useState(false);
 
   useEffect(() => {
     let active = true;
-    getDemoUsers()
-      .then((items) => {
-        if (!active || items.length === 0) return;
-        setUsers(items);
-        if (!items.some((item) => item.id === userId)) {
-          localStorage.setItem("contextguard.userId", items[0].id);
-          setUserId(items[0].id);
-        }
+    const token = localStorage.getItem("contextguard.accessToken");
+    if (!token) { setLoading(false); return () => { active = false; }; }
+    Promise.all([getCurrentUser(), getDemoUsers()])
+      .then(([current, items]) => {
+        if (!active) return;
+        setUser(current);
+        if (items.length) setUsers(items);
+        setAuthenticated(true);
       })
-      .catch(() => undefined)
+      .catch(() => {
+        localStorage.removeItem("contextguard.accessToken");
+        localStorage.removeItem("contextguard.userId");
+      })
       .finally(() => active && setLoading(false));
     return () => { active = false; };
-  }, [userId]);
+  }, []);
 
-  const user = users.find((item) => item.id === userId) ?? users[0];
   const value = useMemo<AuthContextValue>(() => ({
     user,
     users,
     loading,
-    selectUser: (nextUserId) => {
-      localStorage.setItem("contextguard.userId", nextUserId);
-      setUserId(nextUserId);
+    isAuthenticated,
+    login: async (username, password) => {
+      const result = await loginRequest({ username, password });
+      localStorage.setItem("contextguard.accessToken", result.accessToken);
+      localStorage.setItem("contextguard.userId", result.user.id);
+      setUser(result.user);
+      setAuthenticated(true);
+      getDemoUsers().then((items) => items.length && setUsers(items)).catch(() => undefined);
+      return result.user;
     },
-  }), [loading, user, users]);
+    logout: () => {
+      localStorage.removeItem("contextguard.accessToken");
+      localStorage.removeItem("contextguard.userId");
+      setAuthenticated(false);
+      setUser(fallbackUsers[0]);
+    },
+  }), [isAuthenticated, loading, user, users]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

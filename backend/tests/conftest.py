@@ -29,6 +29,6 @@ def database():
 
 @pytest.fixture()
 def client():
-    with TestClient(app) as test_client:
+    with TestClient(app, headers={"X-User-Id": "student_a"}) as test_client:
         yield test_client
 

@@ -87,6 +87,8 @@ def test_high_risk_content_can_be_appealed_and_restored(client):
     assert "newEvidenceImpact" in counter
     assert "reviewSuggestion" in counter
     assert counter["provider"] == "mock-appeal-critic"
+    assert task.json()["analysisRun"]["provider"] == "mock-appeal-critic"
+    assert task.json()["analysisRun"]["evidenceValid"] is True
     assert task.json()["appeal"]["extraContext"].startswith("这是对舞台剧")
 
     decision = client.post(
@@ -371,3 +373,93 @@ def test_provider_failure_is_routed_to_manual_review(client, monkeypatch):
         headers={"X-User-Id": "reviewer_1"},
     ).json()
     assert "TimeoutError" in detail["failureReason"]
+
+
+def test_fabricated_evidence_is_rejected_and_routed_to_manual_review(client, monkeypatch):
+    from app.api.dependencies import moderation_service
+    from app.schemas.common import EvidenceItem, ModerationResult
+
+    def fabricate(payload):
+        return ModerationResult(
+            is_violation=True,
+            risk_level=3,
+            risk_score=96,
+            risk_types=["threat"],
+            confidence=0.99,
+            decision="limit",
+            evidence=[
+                EvidenceItem(
+                    content_id=payload.content_id,
+                    text="这句原文根本不存在",
+                    reason="模型编造的威胁证据",
+                    risk_type="threat",
+                )
+            ],
+            context_reasoning="模型声称发现威胁。",
+            user_visible_reason="内容存在风险。",
+            reviewer_reason="需要校验证据。",
+        )
+
+    monkeypatch.setattr(moderation_service.provider, "moderate", fabricate)
+    created = client.post(
+        "/api/topics/topic-campus-event/contents",
+        headers={"X-User-Id": "student_a"},
+        json={"text": "今天的活动安排保持不变。"},
+    )
+    assert created.status_code == 201
+    body = created.json()
+    assert body["status"] == "pending_manual_review"
+    assert body["moderation"]["systemDecision"] == "manual_review"
+    assert body["moderation"]["evidenceValid"] is False
+    assert body["moderation"]["evidence"][0]["verified"] is False
+
+
+def test_request_more_context_reanalyzes_appeal_and_keeps_each_run(client):
+    created = client.post(
+        "/api/topics/topic-ai-camp/contents",
+        headers={"X-User-Id": "student_a"},
+        json={"text": "你放学等着，我会让你后悔。", "replyToContentId": "floor-102"},
+    ).json()
+    appeal = client.post(
+        f"/api/contents/{created['contentId']}/appeals",
+        headers={"X-User-Id": "student_a"},
+        json={"reason": "第一次判断缺少关键上下文。", "extraContext": "请审核员先核对完整对话。"},
+    ).json()
+    task_id = f"appeal__{appeal['appealId']}"
+
+    requested = client.post(
+        f"/api/reviewer/tasks/{task_id}/decision",
+        headers={"X-User-Id": "reviewer_1"},
+        json={"finalDecision": "need_more_context", "reviewReason": "现有材料不足，请说明这句话出现的具体场景。"},
+    )
+    assert requested.status_code == 200
+    assert requested.json()["contentStatus"] == "need_more_context"
+
+    supplemented = client.post(
+        f"/api/appeals/{appeal['appealId']}/supplement",
+        headers={"X-User-Id": "student_a"},
+        json={"extraContext": "这是舞台剧排练中的引用台词，不是现实威胁。"},
+    )
+    assert supplemented.status_code == 200
+    assert supplemented.json()["status"] == "reviewing"
+    assert supplemented.json()["contentStatus"] == "appeal_reviewing"
+    assert supplemented.json()["analysisCount"] == 2
+
+    detail = client.get(f"/api/reviewer/tasks/{task_id}", headers={"X-User-Id": "reviewer_1"})
+    assert detail.status_code == 200
+    assert detail.json()["counterAnalysis"]["reviewSuggestion"] == "allow"
+
+    allowed = client.post(
+        f"/api/reviewer/tasks/{task_id}/decision",
+        headers={"X-User-Id": "reviewer_1"},
+        json={"finalDecision": "allow", "reviewReason": "补充材料明确证明这是舞台剧引用台词，改判允许。"},
+    )
+    assert allowed.status_code == 200
+    assert allowed.json()["visibleToPublic"] is True
+
+    timeline = client.get(
+        f"/api/contents/{created['contentId']}/timeline", headers={"X-User-Id": "student_a"}
+    ).json()["items"]
+    actions = [event["action"] for event in timeline]
+    assert actions.count("appeal.counter_analyzed") == 2
+    assert "appeal.context_supplemented" in actions

@@ -12,6 +12,7 @@ import {
   getTopicContents,
   getTopics,
   submitAppeal as submitAppealRequest,
+  supplementAppeal as supplementAppealRequest,
   submitReviewDecision,
 } from "../api";
 import { apiErrorMessage } from "../api/client";
@@ -45,6 +46,7 @@ interface DemoContextValue extends DemoState {
   createTopic: (input: NewTopicInput) => Promise<string>;
   submitFloor: (input: NewFloorInput) => Promise<DemoFloor>;
   submitAppeal: (input: AppealInput) => Promise<void>;
+  supplementAppeal: (appealId: string, extraContext: string) => Promise<void>;
   resolveTask: (taskId: string, decision: "allow" | "maintain_limit" | "need_more_context", reason: string) => Promise<void>;
   findTopic: (topicId: string) => DemoTopic | undefined;
   findFloor: (contentId: string) => { topic: DemoTopic; floor: DemoFloor } | undefined;
@@ -67,6 +69,9 @@ const actionTitle: Record<string, string> = {
   "content.limited": "内容暂时限制",
   "content.manual_review_requested": "转人工复核",
   "appeal.submitted": "提交申诉",
+  "appeal.counter_analyzed": "申诉反证分析完成",
+  "appeal.counter_analysis_failed": "申诉反证分析异常",
+  "appeal.context_supplemented": "补充申诉上下文",
   "manual_review.decided": "人工复核完成",
   "content.restored": "内容恢复公开",
   "context.requested": "要求补充上下文",
@@ -102,6 +107,7 @@ function mapModeration(value: ApiModeration | null): DemoModeration {
     systemDecision: value?.systemDecision ?? "manual_review",
     userVisibleReason: value?.userVisibleReason ?? "内容正在处理。",
     reviewerReason: value?.reviewerReason ?? "",
+    dualReview: value?.dualReview ?? null,
   };
 }
 
@@ -146,6 +152,8 @@ function mapAppeal(appeal: ApiAppeal, authorId: string): DemoAppeal {
     status: appeal.status,
     createdAt: appeal.createdAt,
     counterAnalysis: appeal.counterAnalysis,
+    analysisRun: appeal.analysisRun,
+    analysisCount: appeal.analysisCount,
     finalReason: appeal.finalReason ?? undefined,
   };
 }
@@ -162,11 +170,17 @@ function mapTask(task: ApiReviewTask): DemoReviewTask {
     resolvedAt: task.resolvedAt,
     finalDecision: task.finalDecision,
     reviewReason: task.reviewReason,
+    dualReviewDivergent: task.dualReviewDivergent,
+    originalSuggestedAction: task.originalSuggestedAction,
+    originalSystemDecision: task.originalSystemDecision,
+    originalRiskLevel: task.originalRiskLevel,
+    finalRiskLevel: task.finalRiskLevel,
+    wasOverridden: task.wasOverridden,
   };
 }
 
 export function DemoProvider({ children }: { children: ReactNode }) {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, isAuthenticated } = useAuth();
   const [state, setState] = useState<DemoState>(emptyState);
   const [community, setCommunity] = useState<CommunitySummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -175,6 +189,12 @@ export function DemoProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     if (authLoading) return;
+    if (!isAuthenticated) {
+      setState(emptyState);
+      setCommunity(null);
+      setLoading(false);
+      return;
+    }
     const currentRequest = ++requestId.current;
     setLoading(true);
     setError(null);
@@ -246,6 +266,7 @@ export function DemoProvider({ children }: { children: ReactNode }) {
           status: detail.appeal.status as DemoAppeal["status"],
           createdAt: detail.appeal.createdAt,
           counterAnalysis: detail.counterAnalysis,
+          analysisRun: detail.analysisRun,
         }];
       });
 
@@ -263,7 +284,7 @@ export function DemoProvider({ children }: { children: ReactNode }) {
     } finally {
       if (currentRequest === requestId.current) setLoading(false);
     }
-  }, [authLoading, user.id, user.role]);
+  }, [authLoading, isAuthenticated, user.id, user.role]);
 
   useEffect(() => { void refresh(); }, [refresh]);
 
@@ -296,6 +317,10 @@ export function DemoProvider({ children }: { children: ReactNode }) {
     },
     submitAppeal: async ({ contentId, appealType, reason, extraContext }) => {
       await submitAppealRequest(contentId, { appealType, reason, extraContext });
+      await refresh();
+    },
+    supplementAppeal: async (appealId, extraContext) => {
+      await supplementAppealRequest(appealId, extraContext);
       await refresh();
     },
     resolveTask: async (taskId, decision, reason) => {

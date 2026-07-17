@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -13,6 +13,15 @@ class APIModel(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, from_attributes=True)
 
 
+class StrictAIModel(APIModel):
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        from_attributes=True,
+        extra="forbid",
+    )
+
+
 class UserSummary(APIModel):
     id: str
     username: str
@@ -20,20 +29,20 @@ class UserSummary(APIModel):
     role: str
 
 
-class EvidenceItem(APIModel):
+class EvidenceItem(StrictAIModel):
     text: str
     reason: str
     risk_type: str
     content_id: Optional[str] = None
 
 
-class ModerationResult(APIModel):
+class ModerationResult(StrictAIModel):
     is_violation: bool
     risk_level: int = Field(ge=0, le=3)
     risk_score: int = Field(ge=0, le=100)
     risk_types: List[str]
     confidence: float = Field(ge=0, le=1)
-    decision: str
+    decision: Literal["publish", "limit", "manual_review"]
     target_users: List[str] = Field(default_factory=list)
     is_quote_or_report: bool = False
     quote_context_safe: bool = False
@@ -44,6 +53,19 @@ class ModerationResult(APIModel):
     user_visible_reason: str
     reviewer_reason: str
     suggested_revision: str = ""
+    intent: str = ""
+    context_used: List[str] = Field(default_factory=list)
+    uncertainties: List[str] = Field(default_factory=list)
+
+
+class CounterAnalysisResult(StrictAIModel):
+    supports_original_decision: List[str] = Field(default_factory=list)
+    supports_change: List[str] = Field(default_factory=list)
+    new_evidence_impact: str
+    remaining_uncertainties: List[str] = Field(default_factory=list)
+    review_suggestion: Literal["allow", "maintain_limit", "need_more_context"]
+    reviewer_summary: str
+    evidence: List[EvidenceItem] = Field(default_factory=list)
 
 
 class AppealCriticResult(APIModel):
@@ -84,4 +106,3 @@ class ContentItem(APIModel):
     visible_to_public: bool
     created_at: datetime
     moderation: Optional[Dict[str, Any]] = None
-

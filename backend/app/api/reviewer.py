@@ -74,14 +74,25 @@ def task_summary(
         "riskTypes": (record.risk_types or []) if record else [],
         "contextTags": (record.context_tags or []) if record else [],
         "evidenceCount": len(record.evidence or []) if record else 0,
+        "dualReviewDivergent": bool(record and record.comparison and record.comparison.divergent),
         "createdAt": iso_utc(appeal.created_at if appeal else content.created_at),
     }
     if review:
+        final_as_system = {
+            "allow": "publish",
+            "maintain_limit": "limit",
+            "need_more_context": "manual_review",
+        }.get(review.final_decision, review.final_decision)
         value.update(
             {
                 "resolvedAt": iso_utc(review.created_at),
                 "finalDecision": review.final_decision,
+                "finalRiskLevel": review.final_risk_level,
                 "reviewReason": review.review_reason,
+                "originalSuggestedAction": record.suggested_action if record else "manual_review",
+                "originalSystemDecision": record.system_decision if record else "manual_review",
+                "originalRiskLevel": record.risk_level if record else 0,
+                "wasOverridden": bool(record and final_as_system != record.system_decision),
             }
         )
     return value
@@ -109,7 +120,6 @@ def list_tasks(
                 tasks.append(task_summary(content, appeal, review))
         return {"items": tasks}
 
-    reviewed_content_ids = set(db.scalars(select(ManualReview.content_id)).all())
     appeals = db.scalars(
         select(Appeal)
         .options(joinedload(Appeal.content).options(*content_options()))
@@ -119,8 +129,7 @@ def list_tasks(
     appealed_content_ids = {appeal.content_id for appeal in appeals}
     if source in {None, "user_appeal"}:
         for appeal in appeals:
-            if appeal.content_id not in reviewed_content_ids:
-                tasks.append(task_summary(appeal.content, appeal))
+            tasks.append(task_summary(appeal.content, appeal))
 
     if source in {None, "ai_escalation"}:
         manual_contents = db.scalars(
@@ -129,6 +138,7 @@ def list_tasks(
             .where(Content.status == "pending_manual_review")
             .order_by(Content.created_at)
         ).unique().all()
+        reviewed_content_ids = set(db.scalars(select(ManualReview.content_id).where(ManualReview.appeal_id.is_(None))).all())
         for content in manual_contents:
             if content.id not in appealed_content_ids and content.id not in reviewed_content_ids:
                 tasks.append(task_summary(content, None))
@@ -196,7 +206,17 @@ def get_task(
             "status": appeal.status,
             "createdAt": iso_utc(appeal.created_at),
         },
-        "counterAnalysis": appeal.counter_analysis or None if appeal else None,
+        "counterAnalysis": (appeal.counter_analysis or None) if appeal else None,
+        "analysisRun": None
+        if not appeal or not appeal.analysis_records
+        else {
+            "provider": appeal.analysis_records[-1].provider,
+            "modelVersion": appeal.analysis_records[-1].model_version,
+            "promptVersion": appeal.analysis_records[-1].prompt_version,
+            "evidenceValid": appeal.analysis_records[-1].evidence_valid,
+            "failureReason": appeal.analysis_records[-1].failure_reason,
+            "createdAt": iso_utc(appeal.analysis_records[-1].created_at),
+        },
         "timeline": timeline_items(db, content.id),
     }
 
@@ -211,7 +231,10 @@ def decide_task(
     user = get_current_user(db, user_id)
     require_reviewer(user)
     content, appeal = resolve_task(db, task_id)
-    if db.scalar(select(ManualReview).where(ManualReview.content_id == content.id)):
+    if appeal:
+        if appeal.status not in {"submitted", "reviewing"}:
+            raise HTTPException(status_code=409, detail="该申诉当前不在待复核状态")
+    elif db.scalar(select(ManualReview).where(ManualReview.content_id == content.id, ManualReview.appeal_id.is_(None))):
         raise HTTPException(status_code=409, detail="该任务已完成复核")
 
     record = content.moderation_records[-1] if content.moderation_records else None

@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from app.schemas.common import AppealCriticResult, ModerationResult
+from app.schemas.common import AppealCriticResult, CounterAnalysisResult, ModerationResult
 
 
 @dataclass
@@ -25,11 +25,25 @@ class ModerationInput:
     parent_id: Optional[str] = None
     parent_author_id: Optional[str] = None
     messages: List[ContextMessage] = field(default_factory=list)
+    author_history: List[ContextMessage] = field(default_factory=list)
+    target_history: List[ContextMessage] = field(default_factory=list)
+
+
+@dataclass
+class AppealInput:
+    appeal_id: str
+    content: ModerationInput
+    appeal_type: str
+    reason: str
+    extra_context: str
+    original_moderation: Dict[str, Any]
 
 
 class ModerationProvider(ABC):
     name = "abstract"
-    prompt_version = "unknown"
+    prompt_version = "moderation-v1"
+    moderation_prompt_version = "moderation-v1"
+    appeal_prompt_version = "appeal-critic-v1"
     model_version = "unknown"
     rule_version = "unknown"
 
@@ -37,14 +51,13 @@ class ModerationProvider(ABC):
     def moderate(self, payload: ModerationInput) -> ModerationResult:
         raise NotImplementedError
 
+    def analyze_appeal(self, payload: AppealInput) -> CounterAnalysisResult:
+        raise NotImplementedError
+
 
 @dataclass
 class AppealContext:
-    """The initial moderation verdict that the appeal critic MUST consume.
-
-    It is reconstructed from the persisted ModerationRecord so the re-review is
-    time-decoupled from the first review and cannot silently drift.
-    """
+    """Persisted initial moderation verdict consumed by the appeal critic."""
 
     review_id: str
     decision: str
@@ -77,7 +90,8 @@ class AppealCriticInput:
 
 class AppealCriticProvider(ABC):
     name = "abstract"
-    prompt_version = "unknown"
+    prompt_version = "appeal-critic-v1"
+    appeal_prompt_version = "appeal-critic-v1"
     model_version = "unknown"
     rule_version = "unknown"
 
