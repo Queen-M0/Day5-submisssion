@@ -553,9 +553,9 @@ TypeScript 和 Vite 生产构建通过。当前只有大包体积优化提示，
 
 1. [问题定义](SDD/diagnosis/problem-framing.md)
 2. [澄清问题](SDD/diagnosis/clarifying-questions.md)
-3. [产品 PRD](SDD/design-options/product-prd/product-prd.md)
+3. [产品 PRD](SDD/product-prd/product-prd.md)
 4. [方案对比](SDD/design-options/design-options.md)
-5. [规格说明](SDD/design-options/spec/spec.md)
+5. [规格说明](SDD/spec/spec.md)
 6. [决策备忘录](SDD/decision/decision-memo.md)
 7. [系统设计](SDD/design/system-design.md)
 8. [开发流程](SDD/dev-workflow/dev-workflow.md)

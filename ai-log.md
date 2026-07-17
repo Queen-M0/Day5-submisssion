@@ -49,7 +49,7 @@
 | **人工判断** | **采纳极简社区，拒绝多社区、成员管理、点赞收藏、无限嵌套评论。** 理由是这些功能与上下文审核的评分核心关系弱，会稀释两天交付范围 |
 | **最终实现** | 固定社区、话题列表、话题搜索、线性楼层、回复指定楼层、未审核内容不占公开楼层号 |
 | **验证** | 社区、话题、公开楼层和权限隔离接口测试通过 |
-| **证据** | `SDD/design-options/product-prd/product-prd.md`、`frontend/src/pages/CommunityPage.tsx`、`backend/tests/test_moderation_flow.py` |
+| **证据** | `SDD/product-prd/product-prd.md`、`frontend/src/pages/CommunityPage.tsx`、`backend/tests/test_moderation_flow.py` |
 
 ## 第 2 条：选择受控 AI 工作流而不是模型直接终审
 
